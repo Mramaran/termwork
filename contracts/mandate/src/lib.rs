@@ -4,6 +4,7 @@ use near_sdk::{
     env, near, require, AccountId, BorshStorageKey, NearToken, PanicOnDefault, PublicKey,
 };
 
+pub mod agent;
 pub mod employer;
 pub mod types;
 
@@ -242,10 +243,155 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "mission needs at least one clause")]
     fn hire_rejects_empty_clauses() {
         let mut c = fresh();
         ctx("dao.testnet", NearToken::from_near(2));
         c.hire(mission(0), U128(10), U128(100), 300, key());
+    }
+
+    fn agent_ctx(pred: &str, pk: PublicKey, ts_ns: u64) {
+        let mut b = VMContextBuilder::new();
+        b.current_account_id("agent.testnet".parse().unwrap())
+            .predecessor_account_id(pred.parse().unwrap())
+            .signer_account_pk(pk)
+            .attached_deposit(NearToken::from_near(0))
+            .account_balance(NearToken::from_near(5))
+            .block_timestamp(ts_ns);
+        testing_env!(b.build());
+    }
+    fn other_key() -> PublicKey {
+        "ed25519:3tysLvy7KGoE8pznUgXvSHa4vYyGvzKFnTkz2q8oRcZV"
+            .parse()
+            .unwrap()
+    }
+    fn hired() -> Mandate {
+        let mut c = fresh();
+        ctx("dao.testnet", NearToken::from_near(2));
+        let mut m = mission(1);
+        m.clauses.push(Clause {
+            id: 1,
+            text: "capped".into(),
+            max_amount: Some(near_amt(50)),
+            pays: true,
+        });
+        m.clauses.push(Clause {
+            id: 2,
+            text: "free work".into(),
+            max_amount: None,
+            pays: false,
+        });
+        c.hire(
+            m,
+            near_amt(200),
+            U128(NearToken::from_near(1).as_yoctonear()),
+            300,
+            key(),
+        );
+        c
+    }
+    fn near_amt(milli: u128) -> U128 {
+        U128(NearToken::from_millinear(milli).as_yoctonear())
+    }
+    fn bob() -> AccountId {
+        "bob.testnet".parse().unwrap()
+    }
+
+    #[test]
+    fn spend_pays_and_logs() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(100), 0, "https://e/1".into(), "h1".into());
+        assert_eq!(c.budget_spent, near_amt(100).0);
+        let log = c.get_work_log(0, 10);
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[1].kind, EntryKind::Paid);
+        assert_eq!(log[1].recipient, Some(bob()));
+        assert_eq!(log[1].amount, Some(near_amt(100)));
+        assert_eq!(log[1].clause_id, Some(0));
+        let receipts = get_created_receipts();
+        assert!(receipts.iter().any(|r| r.receiver_id.as_str() == "bob.testnet"
+            && r.actions
+                .iter()
+                .any(|a| matches!(a, MockAction::Transfer { .. }))));
+    }
+
+    #[test]
+    #[should_panic(expected = "over threshold")]
+    fn spend_rejects_over_threshold() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(300), 0, "u".into(), "h".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "over clause max")]
+    fn spend_rejects_over_clause_max() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(60), 1, "u".into(), "h".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "clause does not pay")]
+    fn spend_rejects_non_paying_clause() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(10), 2, "u".into(), "h".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "unknown clause")]
+    fn spend_rejects_unknown_clause() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(10), 9, "u".into(), "h".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "already paid")]
+    fn spend_rejects_duplicate_evidence() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(10), 0, "same".into(), "h".into());
+        c.spend(bob(), near_amt(10), 0, "same".into(), "h".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "term ended")]
+    fn spend_rejects_after_term_end() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS + 301 * 1_000_000_000);
+        c.spend(bob(), near_amt(10), 0, "u".into(), "h".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "agent only")]
+    fn spend_rejects_wrong_signer_pk() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", other_key(), T_NS);
+        c.spend(bob(), near_amt(10), 0, "u".into(), "h".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "agent only")]
+    fn spend_rejects_other_predecessor() {
+        let mut c = hired();
+        agent_ctx("bob.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(10), 0, "u".into(), "h".into());
+    }
+
+    #[test]
+    fn log_work_appends_entry() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.log_work(2, "did a thing".into(), Some("https://e/w".into()), None);
+        let log = c.get_work_log(0, 10);
+        assert_eq!(log.len(), 2);
+        assert_eq!(log[1].kind, EntryKind::Work);
+        assert_eq!(log[1].clause_id, Some(2));
+        assert_eq!(log[1].note.as_deref(), Some("did a thing"));
+        assert_eq!(log[1].evidence_url.as_deref(), Some("https://e/w"));
+        assert_eq!(c.budget_spent, 0);
     }
 }

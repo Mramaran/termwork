@@ -1,0 +1,5 @@
+{
+  "name": "termwork",
+  "private": true,
+  "workspaces": ["packages/*", "signer", "agent", "scripts", "web"]
+}

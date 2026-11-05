@@ -255,6 +255,29 @@ describe("signer", () => {
     expect(loadConfig({}).NEAR_NETWORK).toBe("testnet");
   });
 
+  it("rejects non-testnet rpc url", () => {
+    for (const bad of ["https://rpc.mainnet.near.org", "http://rpc.testnet.near.org", "https://example.com/testnet", "nonsense"]) {
+      expect(() => loadConfig({ NEAR_RPC_URL: bad }), bad).toThrow(/NEAR_RPC_URL/);
+    }
+    expect(loadConfig({ NEAR_RPC_URL: "https://rpc.testnet.fastnear.com" }).NEAR_RPC_URL).toBe("https://rpc.testnet.fastnear.com");
+    expect(loadConfig({}).NEAR_RPC_URL).toBe("https://rpc.testnet.near.org");
+  });
+
+  it("times out a hung job without blocking the queue", async () => {
+    let n = 0;
+    const account: AccountLike = {
+      accountId: MANDATE,
+      callFunctionRaw: vi.fn(async () => {
+        if (n++ === 0) return new Promise<never>(() => {});
+        return { transaction: { hash: "OK" } } as any;
+      }),
+    };
+    const ops = buildOps(account, { jobTimeoutMs: 50 });
+    const [a, b] = await Promise.allSettled([ops.expire({}), ops.expire({})]);
+    expect(a.status).toBe("rejected");
+    expect(b.status).toBe("fulfilled");
+  });
+
   it("rejects wrong method (405) and oversized body (413)", async () => {
     const { account } = mockAccount();
     const { address, post } = await start(buildOps(account));

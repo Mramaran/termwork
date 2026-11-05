@@ -122,7 +122,7 @@ async function main(): Promise<void> {
   const factory = accountFactory({
     mandateId: cfg.MANDATE_ID,
     privateKey: cfg.AGENT_PRIVATE_KEY,
-    rpcUrl: process.env.NEAR_RPC_URL || TESTNET_RPC_URL,
+    rpcUrl: cfg.NEAR_RPC_URL,
   });
   const server = createSignerServer(buildOps(factory), {
     token: cfg.SIGNER_TOKEN,

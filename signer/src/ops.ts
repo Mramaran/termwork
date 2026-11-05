@@ -169,13 +169,20 @@ const PARSERS: Record<OpName, (args: unknown) => Record<string, unknown>> = {
  * fresh nonce lookup) for every transaction: near-api-js caches nonces per Account, and a renewal
  * re-adds the agent key with a reset nonce, which would make a cached nonce invalid.
  */
-export function buildOps(account: AccountLike | (() => AccountLike)): Ops {
+export function buildOps(account: AccountLike | (() => AccountLike), opts: { jobTimeoutMs?: number } = {}): Ops {
+  const jobTimeoutMs = opts.jobTimeoutMs ?? 60_000;
   const get = typeof account === "function" ? account : () => account;
   // Fresh Accounts share no nonce lock, so concurrent sends would read the same nonce. Run one
   // transaction at a time; each still re-fetches its nonce (it starts after the previous one resolved).
   let tail: Promise<unknown> = Promise.resolve();
   const serialise = <T>(job: () => Promise<T>): Promise<T> => {
-    const run = tail.then(job, job);
+    // A hung send must not block signing forever: each job gets a deadline (the send itself is not cancelled).
+    const guarded = () =>
+      new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`transaction timed out after ${jobTimeoutMs} ms`)), jobTimeoutMs);
+        job().then(resolve, reject).finally(() => clearTimeout(timer));
+      });
+    const run = tail.then(guarded, guarded);
     tail = run.catch(() => undefined);
     return run;
   };

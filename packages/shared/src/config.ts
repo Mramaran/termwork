@@ -3,6 +3,8 @@ export type AgentMode = "live" | "replay";
 
 export interface Config {
   NEAR_NETWORK: "testnet";
+  /** Testnet RPC endpoint; an override must be https with a host containing "testnet". */
+  NEAR_RPC_URL: string;
   MANDATE_ID: string;
   DAO_ID: string;
   /** Signer process only. Never read this anywhere else. */
@@ -25,6 +27,22 @@ function oneOf<T extends string>(name: string, v: string, allowed: readonly T[])
   return v as T;
 }
 
+export const DEFAULT_TESTNET_RPC_URL = "https://rpc.testnet.near.org";
+
+function testnetRpcUrl(v: string | undefined): string {
+  if (!v) return DEFAULT_TESTNET_RPC_URL;
+  let u: URL;
+  try {
+    u = new URL(v);
+  } catch {
+    throw new Error("NEAR_RPC_URL is not a valid URL");
+  }
+  if (u.protocol !== "https:" || !u.hostname.toLowerCase().includes("testnet")) {
+    throw new Error("NEAR_RPC_URL must be an https URL whose host contains \"testnet\" (this project is testnet only)");
+  }
+  return v;
+}
+
 /** Reads configuration from the environment. Missing values become empty strings; consumers check what they need. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const interval = Number(env.LOOP_INTERVAL_MS ?? 30000);
@@ -33,6 +51,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   const cfg: Config = {
     NEAR_NETWORK: oneOf("NEAR_NETWORK", env.NEAR_NETWORK ?? "testnet", ["testnet"] as const),
+    NEAR_RPC_URL: testnetRpcUrl(env.NEAR_RPC_URL),
     MANDATE_ID: env.MANDATE_ID ?? "",
     DAO_ID: env.DAO_ID ?? "",
     AGENT_PRIVATE_KEY: env.AGENT_PRIVATE_KEY ?? "",

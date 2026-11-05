@@ -6,9 +6,9 @@ const TESTNET_RPC_URL = "https://rpc.testnet.near.org";
 let cached: { network: string; provider: JsonRpcProvider } | undefined;
 
 export function getProvider(): JsonRpcProvider {
-  const { NEAR_NETWORK } = loadConfig();
+  const { NEAR_NETWORK, NEAR_RPC_URL } = loadConfig();
   if (!cached || cached.network !== NEAR_NETWORK) {
-    const url = process.env.NEAR_RPC_URL || TESTNET_RPC_URL;
+    const url = NEAR_RPC_URL;
     cached = { network: NEAR_NETWORK, provider: new JsonRpcProvider({ url }) };
   }
   return cached.provider;

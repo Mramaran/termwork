@@ -36,3 +36,4 @@ Thumbs.db
 
 # ── Local tooling workspaces ──
 .superpowers/
+web/public/demo-output.json

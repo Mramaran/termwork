@@ -150,6 +150,27 @@ describe("signer", () => {
     expect(body.rpcError).toContain("mandate not active");
   });
 
+  it("502 carries txHash for a landed-then-failed transaction and leaks neither key nor token", async () => {
+    const account: AccountLike = {
+      accountId: MANDATE,
+      callFunctionRaw: vi.fn(async () => {
+        throw Object.assign(new Error(`Smart contract panicked: term ended key=${SECRET_KEY} token=${TOKEN}`), {
+          transactionResult: { transaction: { hash: "FAILHASH" } },
+        });
+      }),
+    };
+    const { post } = await start(buildOps(account));
+    const res = await post("/spend", { recipient: "a.testnet", amount: "1", clause_id: 1, evidence_url: "https://e/1", receipt_hash: "ab" });
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error?: string; rpcError?: string; txHash?: string };
+    expect(body.txHash).toBe("FAILHASH");
+    expect(body.error).toBeTruthy();
+    expect(body.rpcError).toContain("term ended");
+    const text = JSON.stringify(body);
+    expect(text).not.toContain(SECRET_KEY);
+    expect(text).not.toContain(TOKEN);
+  });
+
   it("never includes key in responses or logs", async () => {
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) =>
       vi.spyOn(console, m).mockImplementation(() => {}),

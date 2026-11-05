@@ -4,7 +4,7 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils.js";
 import { loadConfig } from "@termwork/shared";
-import { completionText, receiptHash, type InferenceReceipt } from "./receipts.js";
+import { parseCompletion, receiptHash, type InferenceReceipt } from "./receipts.js";
 
 export type { InferenceReceipt } from "./receipts.js";
 export { receiptHash } from "./receipts.js";
@@ -83,16 +83,14 @@ export function verifyEvidence(a: {
   report: AttestationReport;
 }): boolean {
   const { signature: s, report: r, nonce } = a;
+  // Only a model-TEE signature binds the model id; gateway or unknown kinds are never verified.
+  if (s?.signature_kind !== "provider_tee") return false;
   const parts = typeof s?.text === "string" ? s.text.split(":") : [];
-  if (parts.length !== 2 && parts.length !== 3) return false;
-  const tee = parts.length === 3;
-  if (tee && parts[0] !== a.model) return false;
-  if (parts[tee ? 1 : 0] !== sha256(a.requestBody) || parts[tee ? 2 : 1] !== sha256(a.responseText)) return false;
+  if (parts.length !== 3 || parts[0] !== a.model) return false;
+  if (parts[1] !== sha256(a.requestBody) || parts[2] !== sha256(a.responseText)) return false;
   const signer = recoverPersonalSigner(s.text, s.signature ?? "");
   if (!signer) return false;
-  const allowed = tee
-    ? (r.model_attestations ?? []).map((m) => m.signing_address)
-    : [r.gateway_attestation?.signing_address];
+  const allowed = (r.model_attestations ?? []).map((m) => m.signing_address);
   if (!allowed.some((x) => typeof x === "string" && x.toLowerCase() === signer)) return false;
   const models = r.model_attestations ?? [];
   return (
@@ -135,8 +133,7 @@ export async function complete(
   });
   if (!cres.ok) throw await httpError(cres, "Chat completion request failed");
   const responseText = await cres.text();
-  const text = completionText(responseText);
-  const chatId = (JSON.parse(responseText) as { id?: string }).id;
+  const { id: chatId, text } = parseCompletion(responseText);
   if (!chatId) throw new Error("completion response has no id");
 
   const nonce = randomBytes(32).toString("hex");
@@ -176,6 +173,7 @@ export async function complete(
     attestation: report,
     nonce,
     verified,
+    verifiedScope: verified ? "response-signature+model+nonce" : "none",
     mode: "live",
     createdAt: new Date().toISOString(),
   };

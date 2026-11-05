@@ -12,6 +12,8 @@ export interface InferenceReceipt {
   attestation: unknown;
   nonce: string;
   verified: boolean;
+  /** What `verified` covers. The TDX quote and NVIDIA NRAS evidence are never checked. */
+  verifiedScope: "response-signature+model+nonce" | "none";
   mode: "live" | "replay";
   createdAt: string;
 }
@@ -38,12 +40,21 @@ export function receiptHash(r: InferenceReceipt): string {
   return createHash("sha256").update(canonicalJson(r), "utf8").digest("hex");
 }
 
-/** The assistant message text inside an OpenAI-style completion body. */
-export function completionText(responseText: string): string {
-  const j = JSON.parse(responseText) as { choices?: { message?: { content?: unknown } }[] };
-  const c = j.choices?.[0]?.message?.content;
+/** Parses an OpenAI-style completion body once; clear errors instead of a raw SyntaxError. */
+export function parseCompletion(responseText: string): { id: string | undefined; text: string } {
+  let j: { id?: unknown; choices?: { message?: { content?: unknown } }[] };
+  try {
+    j = JSON.parse(responseText);
+  } catch {
+    throw new Error("completion response is not valid JSON");
+  }
+  const c = j?.choices?.[0]?.message?.content;
   if (typeof c !== "string") throw new Error("completion has no choices[0].message.content");
-  return c;
+  return { id: typeof j.id === "string" ? j.id : undefined, text: c };
+}
+
+export function completionText(responseText: string): string {
+  return parseCompletion(responseText).text;
 }
 
 function readIndex(dir: string): Record<string, string> {
@@ -66,14 +77,14 @@ export function saveReceipt(r: InferenceReceipt, dir: string = DEFAULT_RECEIPTS_
   return hash;
 }
 
-/** Stored receipt for `key`, as mode "replay". No network. Throws if the stored file does not match its hash. */
+/** Stored receipt for `key`, unchanged (so receiptHash(receipt) === hash); the wrapper carries mode "replay". No network. Throws if the stored file does not match its hash. */
 export function loadReplay(
   key: string,
   dir: string = DEFAULT_RECEIPTS_DIR,
-): { text: string; receipt: InferenceReceipt; hash: string } | null {
+): { text: string; receipt: InferenceReceipt; hash: string; mode: "replay" } | null {
   const hash = readIndex(dir)[key];
   if (!hash) return null;
   const stored = JSON.parse(readFileSync(join(dir, `${hash}.json`), "utf8")) as InferenceReceipt;
   if (receiptHash(stored) !== hash) throw new Error(`receipt ${hash} does not match its hash (tampered?)`);
-  return { text: completionText(stored.responseText), receipt: { ...stored, mode: "replay" }, hash };
+  return { text: completionText(stored.responseText), receipt: stored, hash, mode: "replay" };
 }

@@ -59,9 +59,30 @@ const opts = { model: MODEL };
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** Replace the signature response with the output of `f`. */
+function tamperSig(f: (j: any, ctx: { sha: (s: string) => string; req: string; body: string }) => unknown) {
+  const fn = mockNet().fn;
+  const orig = fn.getMockImplementation()!;
+  let req = "";
+  let body = "";
+  fn.mockImplementation(async (url, init) => {
+    const u = String(url);
+    if (u.endsWith("/v1/chat/completions")) req = String(init?.body);
+    const res = await orig(url, init);
+    if (u.endsWith("/v1/chat/completions")) {
+      body = await res.clone().text();
+    }
+    if (u.includes("/v1/signature/")) {
+      const j = await res.json();
+      return new Response(JSON.stringify(f(j, { sha, req, body })));
+    }
+    return res;
+  });
+}
+
 const sample = (): InferenceReceipt => ({
   model: MODEL, requestBody: "{}", responseText: JSON.stringify({ choices: [{ message: { content: "SKIP" } }] }),
-  chatId: "c", signature: {}, attestation: {}, nonce: "ab", verified: true, mode: "live", createdAt: "2026-01-01T00:00:00Z",
+  chatId: "c", signature: {}, attestation: {}, nonce: "ab", verified: true, verifiedScope: "response-signature+model+nonce", mode: "live", createdAt: "2026-01-01T00:00:00Z",
 });
 
 describe("receipts", () => {
@@ -83,7 +104,8 @@ describe("receipts", () => {
     const got = loadReplay("https://github.com/o/r/pull/1", dir)!;
     expect(got.hash).toBe(hash);
     expect(got.text).toBe("SKIP");
-    expect(got.receipt.mode).toBe("replay");
+    expect(got.mode).toBe("replay");
+    expect(receiptHash(got.receipt)).toBe(got.hash);
     expect(loadReplay("missing", dir)).toBeNull();
   });
 
@@ -91,7 +113,7 @@ describe("receipts", () => {
     const { fn } = mockNet();
     const dir = mkdtempSync(join(tmpdir(), "rc-"));
     saveReceipt(sample(), dir, "renewal:2");
-    expect(loadReplay("renewal:2", dir)?.receipt.mode).toBe("replay");
+    expect(loadReplay("renewal:2", dir)?.mode).toBe("replay");
     expect(fn).not.toHaveBeenCalled();
   });
 });
@@ -124,6 +146,43 @@ describe("complete", () => {
     mockNet({ echoNonce: false });
     const out = await complete(msgs, "k", opts);
     expect(out.receipt.verified).toBe(false);
+  });
+
+  it("gateway signature is not verified", async () => {
+    tamperSig((j, ctx) => {
+      const text = `${ctx.sha(ctx.req)}:${ctx.sha(ctx.body)}`;
+      return { ...j, text, signature: personalSign(text), signature_kind: "gateway" };
+    });
+    expect((await complete(msgs, "k", opts)).receipt.verified).toBe(false);
+  });
+
+  it("wrong model in signed text is not verified", async () => {
+    tamperSig((j, ctx) => {
+      const text = `other/model:${ctx.sha(ctx.req)}:${ctx.sha(ctx.body)}`;
+      return { ...j, text, signature: personalSign(text) };
+    });
+    expect((await complete(msgs, "k", opts)).receipt.verified).toBe(false);
+  });
+
+  it("tampered response body is not verified", async () => {
+    tamperSig((j, ctx) => {
+      const text = `${MODEL}:${ctx.sha(ctx.req)}:${ctx.sha(ctx.body + " ")}`;
+      return { ...j, text, signature: personalSign(text) };
+    });
+    expect((await complete(msgs, "k", opts)).receipt.verified).toBe(false);
+  });
+
+  it("malformed signature is not verified", async () => {
+    tamperSig((j) => ({ ...j, signature: "0x1234" }));
+    expect((await complete(msgs, "k", opts)).receipt.verified).toBe(false);
+  });
+
+  it("non-JSON completion body gives a clear error", async () => {
+    const fn = mockNet().fn;
+    const orig = fn.getMockImplementation()!;
+    fn.mockImplementation(async (url, init) =>
+      String(url).endsWith("/v1/chat/completions") ? new Response("<html>", { status: 200 }) : orig(url, init));
+    await expect(complete(msgs, "k", opts)).rejects.toThrow(/not valid JSON/);
   });
 
   it("verified false when signature is by another key", async () => {

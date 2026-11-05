@@ -9,7 +9,14 @@ export const ONE_NEAR = 10n ** 24n;
 export const TGAS = 10n ** 12n;
 export const FACTORY = "sputnikv2.testnet";
 export const BOND = ONE_NEAR / 10n; // 0.1 NEAR
-export const WASM_PATH = join(ROOT, "contracts", "mandate", "target", "near", "termwork_mandate.wasm");
+/** Fresh build from source (cargo near build); preferred when present. */
+export const BUILT_WASM_PATH = join(ROOT, "contracts", "mandate", "target", "near", "termwork_mandate.wasm");
+/** Prebuilt wasm committed for judges without a Rust toolchain; see contracts/mandate/res/README.md. */
+export const PREBUILT_WASM_PATH = join(ROOT, "contracts", "mandate", "res", "termwork_mandate.wasm");
+/** The wasm deploy uses: the local build if it exists, else the committed one. */
+export function resolveWasmPath(): string {
+  return existsSync(BUILT_WASM_PATH) ? BUILT_WASM_PATH : PREBUILT_WASM_PATH;
+}
 export const STATE_PATH = join(ROOT, ".termwork-state.json");
 export const ENV_PATH = join(ROOT, ".env");
 

@@ -1,10 +1,3 @@
-# ── Planning and research notes (local only, never published) ──
-NEAR_HACKATHON.md
-MISSION_DAO.md
-ideation/
-docs/
-.claude/
-
 # ── Secrets ──
 .env
 .env.*
@@ -20,10 +13,12 @@ dist/
 build/
 *.wasm
 !contracts/mandate/tests/res/*.wasm
+!contracts/mandate/res/*.wasm
 web/public/receipts/
 
 # ── Runtime output ──
 demo-output.json
+web/public/demo-output.json
 .termwork-state.json
 *.log
 
@@ -33,7 +28,3 @@ demo-output.json
 *.swp
 .DS_Store
 Thumbs.db
-
-# ── Local tooling workspaces ──
-.superpowers/
-web/public/demo-output.json

@@ -12,12 +12,12 @@ Communities are starting to hand real money to AI agents, but they can only swit
 
 ## Try it
 
-Everything runs on NEAR **testnet**; the code refuses any other network. You need Node 22 or newer. Step 3 also needs Rust with the `wasm32-unknown-unknown` target and `cargo-near`; step 4 only needs the wasm that step 3 built.
+Everything runs on NEAR **testnet**; the code refuses any other network. You need Node 22 or newer. A prebuilt mandate wasm is committed at `contracts/mandate/res/termwork_mandate.wasm`, so Rust is optional: step 3 (building from source) needs Rust with the `wasm32-unknown-unknown` target and `cargo-near`, and step 4 uses that build when it exists and the committed wasm otherwise.
 
 1. **Install.** `npm ci` → the install finishes without errors. `npm test` then runs the TypeScript tests and they pass.
 2. **Create a DAO.** `npm run -w scripts setup-dao` → it takes 3 faucet accounts (`termwork-m1-<id>.testnet` to `m3`) from `https://helper.nearprotocol.com`, creates a 2-of-3 Sputnik DAO and prints `setup-dao done: <name>.sputnikv2.testnet`. `DAO_ID` is written to `.env`, and the account names to `.termwork-state.json`.
-3. **Build the contract.** `cd contracts/mandate && cargo near build non-reproducible-wasm && cd ../..` → `contracts/mandate/target/near/termwork_mandate.wasm` exists.
-4. **Deploy it.** `npm run -w scripts deploy` → it creates `steward.<member 2>`, deploys the contract, calls `new`, deletes the account's only key and prints `mandate: steward.…, access keys: []`. `MANDATE_ID` is written to `.env`.
+3. **Build the contract (optional).** `cd contracts/mandate && cargo near build non-reproducible-wasm && cd ../..` → `contracts/mandate/target/near/termwork_mandate.wasm` exists. Skip this step to deploy the committed wasm; its sha256 is in [`contracts/mandate/res/README.md`](contracts/mandate/res/README.md).
+4. **Deploy it.** `npm run -w scripts deploy` → it logs which wasm it uses (`target/near` build if present, else `res/`), creates `steward.<member 2>`, deploys the contract, calls `new`, deletes the account's only key and prints `mandate: steward.…, access keys: []`. `MANDATE_ID` is written to `.env`.
 5. **Hire the agent.** `npm run -w scripts hire -- --term 3600` (term in seconds; default 300) → it generates the agent keypair, writes `AGENT_PRIVATE_KEY` to `.env` (the key is never printed), files the `hire` proposal and casts two council votes. You see `hired: proposal N approved, term 3600s`, and the mandate's only access key is now the agent's function-call key.
 6. **Configure the processes.** Add `SIGNER_TOKEN` to `.env`; generate one with `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`. Every variable is listed in [`.env.example`](.env.example).
 7. **Start the signer** in one terminal: `npm run -w signer start` → `[signer] listening on http://127.0.0.1:8787 for steward.…`.
@@ -26,13 +26,15 @@ Everything runs on NEAR **testnet**; the code refuses any other network. You nee
    - `AGENT_MODE=replay`: no model call and no NEAR AI key; the agent reuses the receipts in `receipts/`, matched by pull request URL. The committed receipts are fixture receipts (see [Receipts](#receipts)), so replay shows rule-based decisions. A pull request with no stored receipt is logged as `no stored receipt for <url>`.
    - `AGENT_MODE=live`: NEAR AI Cloud decides. Needs `NEARAI_API_KEY` and `NEARAI_MODEL`.
 
+   With `SOURCE=fixtures`, the contributor accounts in `fixtures/prs.json` are placeholders (`*.invalid`) that cannot exist on testnet, so outside the demo the agent logs `recipient account does not exist` and pays no one. Only `npm run -w scripts demo` creates real recipient accounts (sub-accounts of a council member) and maps the fixture names onto them.
+
    The agent process exits with `mandate is no longer active, agent stopped` when the mandate's status is not Active, so restart it after a DAO renewal.
-9. **Vote.** When the agent asks for a payment above the spend threshold, or files a renewal case, it creates a DAO proposal. `npm run -w scripts vote <proposalId> approve` (or `reject`) casts council votes until the proposal passes or fails → it prints `proposal <id>: <status>`.
+9. **Vote.** When the agent asks for a payment above the spend threshold, or files a renewal case, it creates a DAO proposal. `npm run -w scripts vote <proposalId> approve` (or `reject`) casts council votes until the proposal passes or fails → it prints `proposal <id>: <status>`. A renewal proposal is not tied to a term: one left open from an earlier term (or from before a fire and re-hire) still renews the current agent if the council approves it, so reject stale renewal proposals instead of voting them through.
 10. **Run the whole story at once.** `npm run -w scripts demo` → see below.
 
 ### The end-to-end demo
 
-`npm run -w scripts demo` does steps 2 to 9 in one process, with its own signer and agent loop, and ends with the fire. It takes about 12 minutes and about 30 NEAR of testnet faucet funds (up to 3 faucet accounts via `https://helper.nearprotocol.com`; the faucet rate-limits, and the script says so if it refuses). Build the wasm first (step 3). The agent mode is `AGENT_MODE` from `.env`, else `live` when `NEARAI_API_KEY` is set, else `fixture`. The demo term is 5 minutes (`DEMO_TERM_SECS`).
+`npm run -w scripts demo` does steps 2 to 9 in one process, with its own signer and agent loop, and ends with the fire. It takes about 12 minutes and about 30 NEAR of testnet faucet funds (up to 3 faucet accounts via `https://helper.nearprotocol.com`; the faucet rate-limits, and the script says so if it refuses). It deploys the committed wasm unless you built your own (step 3). The agent mode is `AGENT_MODE` from `.env`, else `live` when `NEARAI_API_KEY` is set, else `fixture`. The demo term is 5 minutes (`DEMO_TERM_SECS`).
 
 You see a `PASS` line for each assertion, in this order:
 
@@ -42,7 +44,7 @@ You see a `PASS` line for each assertion, in this order:
 4. The DAO votes the big spend down and no money moves.
 5. The agent files its renewal case, and every `[#n]` citation in the report points at a real work-log entry.
 6. The term ends. A late `spend` is sent anyway and fails on-chain with `term ended`.
-7. The DAO votes `fire`, the key list becomes empty, and `sweep` forwards the remaining funds to the DAO.
+7. The DAO votes `fire`, the key list becomes empty, `fire` returns the budget to the DAO, and `sweep` forwards proposal bonds that Sputnik returns after the fire.
 8. The agent retries with its old key and the chain rejects it as a deleted access key.
 
 The run writes `demo-output.json` (git-ignored) with every transaction hash and account. Two transactions from a recorded run on testnet:
@@ -85,7 +87,7 @@ The run writes `demo-output.json` (git-ignored) with every transaction hash and 
  web/ (React, GitHub Pages): reads the chain and receipts/, shows the key card
 ```
 
-- **Mandate contract** (`contracts/mandate`, Rust, near-sdk 5). The DAO calls `hire`, `renew` and `fire` through Sputnik proposals; the contract adds or deletes its own function-call key in response. `spend` pays directly, only within the clause maximum, the spend threshold and the remaining budget, and only once per evidence URL. A larger payment goes through `request_spend`, which opens a DAO proposal. `propose_renewal` stores the agent's report on-chain and opens a renewal proposal. After the term, `expire` (agent key or anyone) ends the mandate and deletes the key, and the DAO calls `release` to take the remaining budget back. After a `fire`, anyone can call `sweep` to forward leftover funds to the DAO.
+- **Mandate contract** (`contracts/mandate`, Rust, near-sdk 5). The DAO calls `hire`, `renew` and `fire` through Sputnik proposals; the contract adds or deletes its own function-call key in response. `spend` pays directly, only within the clause maximum, the spend threshold and the remaining budget (the DAO-voted total, which is the hire deposit plus renewal top-ups, never the account balance), and only once per evidence URL. A larger payment goes through `request_spend`, which opens a DAO proposal. `propose_renewal` stores the agent's report on-chain and opens a renewal proposal; only one can be open per term. After the term, `expire` (agent key or anyone) ends the mandate and deletes the key, and the DAO calls `release` to take the remaining budget back. After a `fire`, anyone can call `sweep` to forward leftover funds to the DAO.
 - **Signer** (`signer`). A local HTTP server on `127.0.0.1` that requires a bearer token and exposes exactly five operations: `spend`, `request_spend`, `log_work`, `propose_renewal`, `expire`. It uses a fresh nonce for every transaction and runs them one at a time. If the RPC times out it answers `504` with "outcome unknown" instead of guessing. It talks only to the testnet RPC hosts on an allowlist.
 - **Agent** (`agent`). Reads merged pull requests from `fixtures/prs.json` (`SOURCE=fixtures`) or the GitHub API (`SOURCE=github`, with `GITHUB_REPO`). For each one it builds a prompt from the mandate, gets a decision from the model, and passes it through a fixed-rule validator (`agent/src/validate.ts`) that turns it into exactly one action: pay, request a vote, or log a skip. For example it skips a pull request that was already paid, has no NEAR account, or is not from a first-time contributor. The agent never signs anything itself.
 - **Receipts** (`receipts/`). Each model answer is stored as a JSON file named by its SHA-256, and the work-log entry carries that hash.

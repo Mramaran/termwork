@@ -23,6 +23,7 @@ const mandate: MandateView = {
   term_end_ms: 1,
   term_number: 1,
   agent_key: null,
+  budget_total: "2000000000000000000000000",
   budget_spent: "0",
   budget_available: near(500),
 };
@@ -62,11 +63,11 @@ describe("rejects malformed decision", () => {
 describe("validate", () => {
   it("small first-time PR → spend 0.2", async () => {
     const a = await validate(dec(), pr1, mandate, new Set(), yes);
-    expect(a).toEqual({ kind: "spend", recipient: "alice-dev.testnet", amountYocto: near(2), clauseId: 2, evidenceUrl: pr1.url });
+    expect(a).toEqual({ kind: "spend", recipient: "alice-dev.invalid", amountYocto: near(2), clauseId: 2, evidenceUrl: pr1.url });
   });
   it("feature PR → request 0.5", async () => {
     const a = await validate(dec({ clause_id: 3, amount_near: "0.5" }), pr4, mandate, new Set(), yes);
-    expect(a).toMatchObject({ kind: "request", amountYocto: near(5), clauseId: 3, recipient: "dave-builds.testnet" });
+    expect(a).toMatchObject({ kind: "request", amountYocto: near(5), clauseId: 3, recipient: "dave-builds.invalid" });
   });
   it("repeat author → log skip", async () => {
     const a = await validate(dec(), pr5, mandate, new Set(), yes);

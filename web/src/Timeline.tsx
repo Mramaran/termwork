@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Clause, LogEntry } from "@termwork/shared";
-import { explorerAccount, fetchReceipt, isReceiptHash, fmtNear, receiptBadge, type Receipt } from "./chain";
+import { explorerAccount, fetchReceipt, publicUrl, isReceiptHash, fmtNear, receiptBadge, type Receipt } from "./chain";
 
 export const safeHttp = (u: string | null | undefined): string | null => {
   if (!u) return null;
@@ -23,7 +23,7 @@ function ReceiptBadge({ hash }: { hash: string }) {
   return (
     <a
       className={`badge badge-${tone}`}
-      href={`/receipts/${hash}.json`}
+      href={publicUrl(`receipts/${hash}.json`)}
       target="_blank"
       rel="noreferrer"
       title={`receipt ${hash}`}

@@ -130,10 +130,15 @@ export function receiptBadge(r: Receipt | null | undefined): { label: string; to
   return { label: "unverified", tone: "warn" };
 }
 
+/** URL of a file served next to the page, honouring the Vite base (e.g. /<repo>/ on GitHub Pages). */
+export function publicUrl(path: string, base: string = import.meta.env.BASE_URL || "/"): string {
+  return `${base.endsWith("/") ? base : `${base}/`}${path.replace(/^\/+/, "")}`;
+}
+
 export async function fetchReceipt(hash: string): Promise<Receipt | null> {
   if (!/^[0-9a-f]{64}$/i.test(hash)) return null;
   try {
-    const r = await fetch(`/receipts/${hash}.json`);
+    const r = await fetch(publicUrl(`receipts/${hash}.json`));
     if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json")) return null;
     return (await r.json()) as Receipt;
   } catch {
@@ -199,7 +204,7 @@ export interface DemoOutput {
 
 export async function loadDemoOutput(): Promise<DemoOutput | null> {
   try {
-    const r = await fetch("/demo-output.json");
+    const r = await fetch(publicUrl("demo-output.json"));
     if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json")) return null;
     return (await r.json()) as DemoOutput;
   } catch {

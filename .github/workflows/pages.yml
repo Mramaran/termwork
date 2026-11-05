@@ -25,7 +25,8 @@ jobs:
       VITE_DAO_ID: ${{ vars.VITE_DAO_ID }}
       VITE_NETWORK: testnet
       # Project pages live at https://<owner>.github.io/<repo>/, so Vite's base is the repo name.
-      BASE_PATH: /${{ github.event.repository.name }}/
+      # A repo named <owner>.github.io is served from the site root instead.
+      BASE_PATH: ${{ endsWith(github.event.repository.name, '.github.io') && '/' || format('/{0}/', github.event.repository.name) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

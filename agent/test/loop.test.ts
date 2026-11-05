@@ -23,6 +23,7 @@ const mandate = (o: Partial<MandateView> = {}): MandateView => ({
   term_end_ms: TERM,
   term_number: 1,
   agent_key: null,
+  budget_total: "2000000000000000000000000",
   budget_spent: "0",
   budget_available: near(500),
   ...o,

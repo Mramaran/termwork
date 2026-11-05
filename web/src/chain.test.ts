@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { budgetBar, classifyKeyError, keyStatus, linkifyCitations, receiptBadge, rpcUrl } from "./chain";
+import { budgetBar, classifyKeyError, keyStatus, linkifyCitations, publicUrl, receiptBadge, rpcUrl } from "./chain";
+
+describe("publicUrl", () => {
+  it("is root-relative with the default base", () => {
+    expect(publicUrl("receipts/abc.json", "/")).toBe("/receipts/abc.json");
+    expect(publicUrl("demo-output.json", "/")).toBe("/demo-output.json");
+  });
+  it("prefixes the project-pages base", () => {
+    expect(publicUrl("receipts/abc.json", "/termwork/")).toBe("/termwork/receipts/abc.json");
+    expect(publicUrl("/demo-output.json", "/termwork/")).toBe("/termwork/demo-output.json");
+  });
+  it("tolerates a base without a trailing slash", () => {
+    expect(publicUrl("demo-output.json", "/termwork")).toBe("/termwork/demo-output.json");
+  });
+});
 
 describe("chain helpers", () => {
   it("keyStatus returns deleted when key list empty", () => {

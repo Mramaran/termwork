@@ -75,6 +75,8 @@ export interface MandateView {
   term_number: number;
   /** Public key string (ed25519:...) or null. The retired key is not exposed by get_mandate. */
   agent_key: string | null;
+  /** Hire deposit plus renewal top-ups: the most the agent can ever spend. */
+  budget_total: Yocto;
   budget_spent: Yocto;
   budget_available: Yocto;
 }

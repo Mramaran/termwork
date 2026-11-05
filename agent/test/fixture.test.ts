@@ -17,6 +17,7 @@ const mandate: MandateView = {
   term_end_ms: 1,
   term_number: 1,
   agent_key: null,
+  budget_total: near(20),
   budget_spent: near(6),
   budget_available: near(14),
 };

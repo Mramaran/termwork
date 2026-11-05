@@ -13,6 +13,8 @@ export interface Config {
   SIGNER_TOKEN: string;
   NEARAI_API_KEY: string;
   NEARAI_MODEL: string;
+  /** NEARAI_ALLOW_UNVERIFIED=1 permits models not owned by nearai; their receipts are marked unverified. */
+  NEARAI_ALLOW_UNVERIFIED: boolean;
   SOURCE: Source;
   GITHUB_REPO: string;
   GITHUB_TOKEN?: string;
@@ -59,6 +61,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     SIGNER_TOKEN: env.SIGNER_TOKEN ?? "",
     NEARAI_API_KEY: env.NEARAI_API_KEY ?? "",
     NEARAI_MODEL: env.NEARAI_MODEL ?? "",
+    NEARAI_ALLOW_UNVERIFIED: env.NEARAI_ALLOW_UNVERIFIED === "1",
     SOURCE: oneOf("SOURCE", env.SOURCE ?? "fixtures", ["fixtures", "github"] as const),
     GITHUB_REPO: env.GITHUB_REPO ?? "",
     AGENT_MODE: oneOf("AGENT_MODE", env.AGENT_MODE ?? "live", ["live", "replay"] as const),

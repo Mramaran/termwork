@@ -1,4 +1,5 @@
 import { accountExists, viewMandate, type Config, type LogEntry, type MandateView, type Renewal, type SpendRequest } from "@termwork/shared";
+import { fixtureDecision, fixtureReceipt, fixtureReport } from "./fixture.js";
 import { complete } from "./nearai.js";
 import { decisionMessages, reportMessages } from "./prompts.js";
 import { loadReplay, saveReceipt } from "./receipts.js";
@@ -202,6 +203,11 @@ export function realDeps(cfg: Config, source: SourceAdapter): LoopDeps {
     const r = await complete(messages, cfg.NEARAI_API_KEY);
     return { text: r.text, hash: saveReceipt(r.receipt, undefined, key) };
   };
+  // Fixture mode: rules instead of a model. The stored receipt says so (model fixture-rules, verified false).
+  const fixtureOutput = (messages: Parameters<typeof complete>[0], text: string, key: string): ModelOutput => ({
+    text,
+    hash: saveReceipt(fixtureReceipt(messages, text, key), undefined, key),
+  });
   const logLine = (line: string) => console.log(`[${new Date().toISOString()}] ${line}`);
   return {
     now: () => Date.now(),
@@ -212,12 +218,14 @@ export function realDeps(cfg: Config, source: SourceAdapter): LoopDeps {
     source,
     exists: accountExists,
     decide: async (pr, m) => {
+      if (cfg.AGENT_MODE === "fixture") return fixtureOutput(decisionMessages(m, pr), fixtureDecision(pr), pr.url);
       const out = await modelOutput(decisionMessages(m, pr), pr.url);
       if (!out) logLine(`no stored receipt for ${pr.url}`);
       return out;
     },
     generateReport: async (m, log, previousError) => {
       const key = `renewal:${m.term_number}`;
+      if (cfg.AGENT_MODE === "fixture") return fixtureOutput(reportMessages(m, log, previousError), fixtureReport(m, log), key);
       const out = await modelOutput(reportMessages(m, log, previousError), key);
       if (!out) logLine(`no stored receipt for ${key}`);
       return out;

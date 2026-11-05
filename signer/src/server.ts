@@ -92,7 +92,10 @@ export function createSignerServer(ops: Ops, opts: SignerServerOptions): http.Se
         }
         const rpcError = redact(e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ");
         console.error(`[signer] ${path} chain error: ${rpcError.slice(0, 300)}`);
-        return send(res, 502, { error: "chain call failed", rpcError });
+        // A transaction that landed and failed (e.g. "term ended") still has a hash worth linking to.
+        const failed = e as { transactionResult?: { transaction?: { hash?: unknown } } };
+        const hash = failed.transactionResult?.transaction?.hash;
+        return send(res, 502, { error: "chain call failed", rpcError, ...(typeof hash === "string" ? { txHash: hash } : {}) });
       }
     } catch (e) {
       const status = (e as { status?: number }).status ?? (e instanceof ValidationError ? 400 : 500);

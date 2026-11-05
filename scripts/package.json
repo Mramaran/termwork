@@ -2,7 +2,17 @@
   "name": "@termwork/scripts",
   "private": true,
   "type": "module",
+  "scripts": {
+    "setup-dao": "tsx src/setup-dao.ts",
+    "deploy": "tsx src/deploy.ts",
+    "hire": "tsx src/hire.ts",
+    "vote": "tsx src/vote.ts",
+    "fire": "tsx src/fire.ts",
+    "demo": "tsx src/demo.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
   "dependencies": {
+    "@termwork/shared": "*",
     "near-api-js": "^7.0.0"
   },
   "devDependencies": {

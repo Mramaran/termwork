@@ -14,7 +14,7 @@ export interface InferenceReceipt {
   verified: boolean;
   /** What `verified` covers. The TDX quote and NVIDIA NRAS evidence are never checked. */
   verifiedScope: "response-signature+model+nonce" | "none";
-  mode: "live" | "replay";
+  mode: "live" | "replay" | "fixture";
   createdAt: string;
 }
 

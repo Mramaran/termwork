@@ -1,0 +1,25 @@
+{
+  "model": "fixture-rules",
+  "requestBody": {
+    "model": "fixture-rules",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are the advisor of Termwork's \"Contributor Rewards Steward\" agent. A DAO hired the agent for a fixed term under this mandate:\n- clause 1: Reward first-time contributors whose pull requests are merged into the repo, within 48 hours of the merge. (pays: true, max_amount yoctoNEAR: 500000000000000000000000)\n- clause 2: Standard reward: 0.2 NEAR per qualifying pull request. (pays: true, max_amount yoctoNEAR: 200000000000000000000000)\n- clause 3: A larger pull request (a `feature` label, or more than 200 changed lines) deserves 0.5 NEAR. Because that is over the spend threshold, it goes to a DAO vote instead of being paid directly. (pays: true, max_amount yoctoNEAR: 500000000000000000000000)\n- clause 4: Never pay a pull request twice, or one without a NEAR account given in its body. (pays: false, max_amount yoctoNEAR: none)\nYou only advise. Fixed rules outside your control check your answer and decide whether anything is paid, so never claim to have paid or acted.\nDecide whether the merged pull request below earns a reward under one clause.\nOutput strict JSON and nothing else, matching: {\"qualifies\": boolean, \"clause_id\": number, \"amount_near\": string, \"rationale\": string}.\namount_near is a decimal NEAR amount written as a string, for example \"0.2\". rationale is one or two sentences."
+      },
+      {
+        "role": "user",
+        "content": "{\"url\":\"https://github.com/termwork/demo/pull/2\",\"title\":\"Add missing error message\",\"author\":\"bob-codes\",\"first_time_contributor\":true,\"changed_lines\":35,\"labels\":[\"bug\"],\"merged_at\":\"2026-11-01T12:00:00Z\"}"
+      }
+    ]
+  },
+  "responseText": "{\"id\":\"fixture:https://github.com/termwork/demo/pull/2\",\"model\":\"fixture-rules\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"qualifies\\\":true,\\\"clause_id\\\":2,\\\"amount_near\\\":\\\"0.2\\\",\\\"rationale\\\":\\\"First-time contributor with a small merged pull request (35 changed lines): standard reward under clause 2.\\\"}\"}}]}",
+  "chatId": "fixture:https://github.com/termwork/demo/pull/2",
+  "signature": null,
+  "attestation": null,
+  "nonce": "",
+  "verified": false,
+  "verifiedScope": "none",
+  "mode": "fixture",
+  "createdAt": "2026-11-05T13:05:26.708Z"
+}

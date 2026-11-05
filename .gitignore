@@ -24,6 +24,7 @@ web/public/receipts/
 
 # ── Runtime output ──
 demo-output.json
+.termwork-state.json
 *.log
 
 # ── Editor and OS files ──

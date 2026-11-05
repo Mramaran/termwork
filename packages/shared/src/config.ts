@@ -1,5 +1,6 @@
 export type Source = "fixtures" | "github";
-export type AgentMode = "live" | "replay";
+/** fixture = deterministic rule-based decisions with honestly labelled, unverified receipts (no model, no network). */
+export type AgentMode = "live" | "replay" | "fixture";
 
 export interface Config {
   NEAR_NETWORK: "testnet";
@@ -39,8 +40,9 @@ function testnetRpcUrl(v: string | undefined): string {
   } catch {
     throw new Error("NEAR_RPC_URL is not a valid URL");
   }
-  if (u.protocol !== "https:" || !u.hostname.toLowerCase().includes("testnet")) {
-    throw new Error("NEAR_RPC_URL must be an https URL whose host contains \"testnet\" (this project is testnet only)");
+  const host = u.hostname.toLowerCase();
+  if (u.protocol !== "https:" || !(host.includes("testnet") || host.startsWith("test."))) {
+    throw new Error("NEAR_RPC_URL must be an https URL whose host contains \"testnet\" or starts with \"test.\" (this project is testnet only)");
   }
   return v;
 }
@@ -64,7 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     NEARAI_ALLOW_UNVERIFIED: env.NEARAI_ALLOW_UNVERIFIED === "1",
     SOURCE: oneOf("SOURCE", env.SOURCE ?? "fixtures", ["fixtures", "github"] as const),
     GITHUB_REPO: env.GITHUB_REPO ?? "",
-    AGENT_MODE: oneOf("AGENT_MODE", env.AGENT_MODE ?? "live", ["live", "replay"] as const),
+    AGENT_MODE: oneOf("AGENT_MODE", env.AGENT_MODE ?? "live", ["live", "replay", "fixture"] as const),
     LOOP_INTERVAL_MS: interval,
   };
   if (env.GITHUB_TOKEN) cfg.GITHUB_TOKEN = env.GITHUB_TOKEN;

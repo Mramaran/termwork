@@ -12,7 +12,7 @@ Communities are starting to hand real money to AI agents, but they can only swit
 
 ## Try it
 
-Everything runs on NEAR **testnet**; the code refuses any other network. You need Node 22 or newer. Steps 3 and 4 also need Rust with the `wasm32-unknown-unknown` target and `cargo-near`.
+Everything runs on NEAR **testnet**; the code refuses any other network. You need Node 22 or newer. Step 3 also needs Rust with the `wasm32-unknown-unknown` target and `cargo-near`; step 4 only needs the wasm that step 3 built.
 
 1. **Install.** `npm ci` → the install finishes without errors. `npm test` then runs the TypeScript tests and they pass.
 2. **Create a DAO.** `npm run -w scripts setup-dao` → it takes 3 faucet accounts (`termwork-m1-<id>.testnet` to `m3`) from `https://helper.nearprotocol.com`, creates a 2-of-3 Sputnik DAO and prints `setup-dao done: <name>.sputnikv2.testnet`. `DAO_ID` is written to `.env`, and the account names to `.termwork-state.json`.
@@ -42,7 +42,7 @@ You see a `PASS` line for each assertion, in this order:
 4. The DAO votes the big spend down and no money moves.
 5. The agent files its renewal case, and every `[#n]` citation in the report points at a real work-log entry.
 6. The term ends. A late `spend` is sent anyway and fails on-chain with `term ended`.
-7. The DAO votes `fire`, the key list becomes empty, and `sweep` returns the remaining budget to the DAO.
+7. The DAO votes `fire`, the key list becomes empty, and `sweep` forwards the remaining funds to the DAO.
 8. The agent retries with its old key and the chain rejects it as a deleted access key.
 
 The run writes `demo-output.json` (git-ignored) with every transaction hash and account. Two transactions from a recorded run on testnet:
@@ -69,8 +69,9 @@ The run writes `demo-output.json` (git-ignored) with every transaction hash and 
  │ lives on the agent's own account, no full-access key after deploy              │
  │ holds: mission, budget, term, work log, spend requests, renewal case           │
  │ hire/renew: adds the agent's function-call key      fire: deletes it           │
- │ expire (term over)   sweep (budget back to the DAO)   release                  │
- │ agent-key methods: spend · request_spend · log_work · propose_renewal · expire │
+ │ agent key: spend · request_spend · log_work · propose_renewal · expire         │
+ │ anyone: expire (after term end) · sweep (after fire, funds to the DAO)         │
+ │ DAO only: hire · renew · fire · release (after expiry, funds to the DAO)       │
  └────────────────────────────────────▲────────────────────────────────────────────┘
                                       │ signed transactions (fresh nonce each)
  ┌─────────── signer (signer/) ───────┴───┐      ┌──────────── agent (agent/) ───────────┐
@@ -84,7 +85,7 @@ The run writes `demo-output.json` (git-ignored) with every transaction hash and 
  web/ (React, GitHub Pages): reads the chain and receipts/, shows the key card
 ```
 
-- **Mandate contract** (`contracts/mandate`, Rust, near-sdk 5). The DAO calls `hire`, `renew` and `fire` through Sputnik proposals; the contract adds or deletes its own function-call key in response. `spend` pays directly, only within the clause maximum, the spend threshold and the remaining budget, and only once per evidence URL. A larger payment goes through `request_spend`, which opens a DAO proposal. `propose_renewal` stores the agent's report on-chain and opens a renewal proposal. After the term, `expire` ends the mandate and `sweep` returns the remaining budget to the DAO.
+- **Mandate contract** (`contracts/mandate`, Rust, near-sdk 5). The DAO calls `hire`, `renew` and `fire` through Sputnik proposals; the contract adds or deletes its own function-call key in response. `spend` pays directly, only within the clause maximum, the spend threshold and the remaining budget, and only once per evidence URL. A larger payment goes through `request_spend`, which opens a DAO proposal. `propose_renewal` stores the agent's report on-chain and opens a renewal proposal. After the term, `expire` (agent key or anyone) ends the mandate and deletes the key, and the DAO calls `release` to take the remaining budget back. After a `fire`, anyone can call `sweep` to forward leftover funds to the DAO.
 - **Signer** (`signer`). A local HTTP server on `127.0.0.1` that requires a bearer token and exposes exactly five operations: `spend`, `request_spend`, `log_work`, `propose_renewal`, `expire`. It uses a fresh nonce for every transaction and runs them one at a time. If the RPC times out it answers `504` with "outcome unknown" instead of guessing. It talks only to the testnet RPC hosts on an allowlist.
 - **Agent** (`agent`). Reads merged pull requests from `fixtures/prs.json` (`SOURCE=fixtures`) or the GitHub API (`SOURCE=github`, with `GITHUB_REPO`). For each one it builds a prompt from the mandate, gets a decision from the model, and passes it through a fixed-rule validator (`agent/src/validate.ts`) that turns it into exactly one action: pay, request a vote, or log a skip. For example it skips a pull request that was already paid, has no NEAR account, or is not from a first-time contributor. The agent never signs anything itself.
 - **Receipts** (`receipts/`). Each model answer is stored as a JSON file named by its SHA-256, and the work-log entry carries that hash.
@@ -108,7 +109,8 @@ The `receipts/` folder in this repository currently holds **fixture receipts**. 
 ## Where the key lives and why the model never sees it
 
 - `hire` writes the agent's function-call private key to `.env` as `AGENT_PRIVATE_KEY`, and `.env` is git-ignored.
-- Only the signer uses it. The signer loads the repo-root `.env`; the agent loads the same file but skips `AGENT_PRIVATE_KEY` (`agent/src/main.ts`), so the agent process never has the key in its environment.
+- The standalone signer (`npm run -w signer start`) is the only process that loads `AGENT_PRIVATE_KEY`. The standalone agent (`npm run -w agent start`) reads the same `.env` but drops that variable (`agent/src/env.ts`). Do not `export AGENT_PRIVATE_KEY` in the shell you start the agent from; an exported value would be inherited by the agent process.
+- `npm run -w scripts demo` runs the signer and the agent loop in one process for convenience, so in the demo the key is in that process's environment. It is still never sent to the model.
 - The model receives only prompt text built from the mandate and one pull request. It has no tools and no key; its answer is parsed as data and checked by the validator.
 - The agent reaches the chain only through the signer's five operations. The signer is bound to `127.0.0.1`, needs the bearer token, and scrubs the key and the token from error text before it leaves the process.
 - The key can only call the mandate's agent methods. The mandate account has no full-access key after deploy, and `fire` deletes the agent key. The demo's last step shows the old key being rejected.

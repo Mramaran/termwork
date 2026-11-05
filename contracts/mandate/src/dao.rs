@@ -114,7 +114,7 @@ impl Mandate {
         });
 
         let description = format!(
-            "Mission DAO: big spend #{} — {} NEAR to {} for {}. Rationale: {}",
+            "Termwork: big spend #{} — {} NEAR to {} for {}. Rationale: {}",
             id,
             fmt_near(amount.0),
             recipient,

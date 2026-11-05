@@ -67,6 +67,7 @@ impl Mandate {
             .cloned()
             .unwrap_or_else(|| env::panic_str("unknown request"));
         require!(req.state == RequestState::Pending, "not pending");
+        require!(!self.paid_refs.contains(&req.evidence_url), "already paid");
         require!(
             req.amount.0 <= self.budget_available(),
             "insufficient budget"

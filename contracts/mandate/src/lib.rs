@@ -527,6 +527,60 @@ mod tests {
     }
 
     #[test]
+    fn request_spend_description_uses_termwork_prefix() {
+        let mut c = hired_big(500);
+        request(&mut c, 400, "https://e/big");
+        let receipts = get_created_receipts();
+        let r = receipts
+            .iter()
+            .find(|r| r.receiver_id.as_str() == "dao.testnet")
+            .unwrap();
+        let ok = r.actions.iter().any(|a| matches!(
+            a,
+            MockAction::FunctionCallWeight { args, .. }
+                if {
+                    let v: near_sdk::serde_json::Value = near_sdk::serde_json::from_slice(args).unwrap();
+                    let d = v["proposal"]["description"].as_str().unwrap();
+                    d.starts_with("Termwork: ") && d.contains("#0") && d.contains("0.4 NEAR")
+                }
+        ));
+        assert!(ok);
+    }
+
+    #[test]
+    #[should_panic(expected = "over clause max")]
+    fn request_spend_rejects_over_clause_max() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS);
+        let _ = c.request_spend(bob(), near_amt(300), 1, "u".into(), "h".into(), "r".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "insufficient budget")]
+    fn request_spend_rejects_insufficient_budget() {
+        let mut c = hired_big(500);
+        let mut b = VMContextBuilder::new();
+        b.current_account_id("agent.testnet".parse().unwrap())
+            .predecessor_account_id("agent.testnet".parse().unwrap())
+            .signer_account_pk(key())
+            .account_balance(NearToken::from_millinear(300))
+            .block_timestamp(T_NS);
+        testing_env!(b.build());
+        let _ = c.request_spend(bob(), near_amt(400), 0, "u".into(), "h".into(), "r".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "already paid")]
+    fn execute_approved_spend_rejects_already_paid_evidence() {
+        let mut c = hired_big(500);
+        request(&mut c, 400, "x");
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(10), 0, "x".into(), "h".into());
+        dao_ctx(NearToken::from_near(5));
+        c.execute_approved_spend(0);
+    }
+
+    #[test]
     fn log_work_appends_entry() {
         let mut c = hired();
         agent_ctx("agent.testnet", key(), T_NS);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Clause, LogEntry } from "@termwork/shared";
-import { explorerAccount, fetchReceipt, fmtNear, receiptBadge, type Receipt } from "./chain";
+import { explorerAccount, fetchReceipt, isReceiptHash, fmtNear, receiptBadge, type Receipt } from "./chain";
 
 export const safeHttp = (u: string | null | undefined): string | null => {
   if (!u) return null;
@@ -60,7 +60,7 @@ export function Timeline({ log, clauses }: { log: LogEntry[]; clauses: Clause[] 
                   pull request
                 </a>
               )}
-              {e.receipt_hash && <ReceiptBadge hash={e.receipt_hash} />}
+              {isReceiptHash(e.receipt_hash) && <ReceiptBadge hash={e.receipt_hash} />}
             </div>
             {e.note && <p className="tl-note">{e.note}</p>}
           </li>

@@ -38,11 +38,19 @@ export function App() {
       return;
     }
     let live = true;
-    const tick = () =>
-      loadSnapshot().then(
-        (s) => live && (setSnap(s), setError(null)),
-        (e: Error) => live && setError(e.message),
-      );
+    let inflight = false;
+    const tick = () => {
+      if (inflight) return Promise.resolve();
+      inflight = true;
+      return loadSnapshot()
+        .then(
+          (s) => live && (setSnap(s), setError(null)),
+          (e: Error) => live && setError(e.message),
+        )
+        .finally(() => {
+          inflight = false;
+        });
+    };
     void tick();
     const t = setInterval(tick, 5000);
     return () => {

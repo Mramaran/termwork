@@ -46,3 +46,17 @@ describe("chain helpers", () => {
     expect(() => rpcUrl("http://rpc.testnet.near.org")).toThrow();
   });
 });
+
+describe("keyEndLink", () => {
+  it("key deleted with no demo output links to the mandate account explorer", async () => {
+    const { keyEndLink } = await import("./chain");
+    const l = keyEndLink("Fired", "steward.x.testnet", null);
+    expect(l.href).toBe("https://testnet.nearblocks.io/address/steward.x.testnet");
+    expect(keyEndLink("Expired", "steward.x.testnet", { txs: {} }).href).toContain("/address/");
+  });
+  it("uses the demo fire hash when present", async () => {
+    const { keyEndLink } = await import("./chain");
+    const h = "DWfgznuamSJJ6ki8KYTek6m3j4i2kVofr74HQPVXJCny";
+    expect(keyEndLink("Fired", "m.testnet", { txs: { "fire.vote2": { hash: h, explorer: "" } } }).href).toBe(`https://testnet.nearblocks.io/txns/${h}`);
+  });
+});

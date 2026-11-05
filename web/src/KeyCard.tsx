@@ -1,5 +1,5 @@
 import type { Status } from "@termwork/shared";
-import { classifyKeyError, explorerAccount, explorerTx, keyStatus, type AccessKeyInfo, type DemoOutput } from "./chain";
+import { classifyKeyError, explorerAccount, keyEndLink, keyStatus, type AccessKeyInfo, type DemoOutput } from "./chain";
 
 interface Props {
   mandateId: string;
@@ -8,21 +8,11 @@ interface Props {
   demo: DemoOutput | null;
 }
 
-function endTx(status: Status, demo: DemoOutput | null): { href: string; label: string } | null {
-  const t = demo?.txs;
-  if (status === "Fired" && t) {
-    const tx = t["fire.vote2"] ?? t["fire.vote1"];
-    if (tx) return { href: explorerTx(tx.hash), label: "the vote that fired the agent" };
-  }
-  if (status === "Expired" && t?.["expire"]) return { href: explorerTx(t["expire"].hash), label: "the expiry" };
-  return null;
-}
-
 export function KeyCard({ mandateId, keys, status, demo }: Props) {
   const state = keyStatus(keys);
   const awaiting = status === "Unhired";
   const tone = awaiting ? "idle" : state;
-  const tx = state === "deleted" && !awaiting ? endTx(status, demo) : null;
+  const tx = state === "deleted" && !awaiting ? keyEndLink(status, mandateId, demo) : null;
   const attempt = demo?.agentAttempt;
   const attemptKind = attempt ? classifyKeyError(`${attempt.result} ${attempt.rpcError}`) : null;
 

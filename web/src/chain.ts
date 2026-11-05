@@ -26,7 +26,7 @@ let cachedRpc: string | undefined;
 const RPC = (): string => (cachedRpc ??= rpcUrl(env.VITE_NEAR_RPC_URL));
 
 export const explorerTx = (hash: string): string => `https://testnet.nearblocks.io/txns/${hash}`;
-export const explorerAccount = (id: string): string => `https://testnet.nearblocks.io/address/${id}`;
+export const explorerAccount = (id: string): string => `https://testnet.nearblocks.io/address/${encodeURIComponent(id)}`;
 
 let rpcId = 0;
 async function rpc<T>(method: string, params: unknown): Promise<T> {
@@ -95,6 +95,13 @@ export function budgetBar(spent: string, available: string): BudgetBar {
   const d = s + a;
   const spentPct = d === 0n ? 0 : Number((s * 10000n) / d) / 100;
   return { deposit: d.toString(), spent: s.toString(), available: a.toString(), spentPct, availablePct: d === 0n ? 0 : 100 - spentPct };
+}
+
+export function keyEndLink(status: Status, mandateId: string, demo: DemoOutput | null): { href: string; label: string } {
+  const t = demo?.txs;
+  const tx = status === "Fired" ? (t?.["fire.vote2"] ?? t?.["fire.vote1"] ?? t?.["fire"]) : status === "Expired" ? t?.["expire"] : undefined;
+  if (tx && /^[1-9A-HJ-NP-Za-km-z]{32,64}$/.test(tx.hash)) return { href: explorerTx(tx.hash), label: status === "Fired" ? "the transaction that fired the agent" : "the expiry transaction" };
+  return { href: explorerAccount(mandateId), label: "the DeleteKey transaction (see DeleteKey on explorer)" };
 }
 
 export function fmtNear(yocto: string | null | undefined, digits = 3): string {
@@ -203,3 +210,11 @@ export async function loadDemoOutput(): Promise<DemoOutput | null> {
 /** Sputnik vote args, as used by scripts/src/dao.ts (gas 300 Tgas). */
 export const VOTE_GAS = "300000000000000";
 export const voteArgs = (id: number, approve: boolean) => ({ id, action: approve ? "VoteApprove" : "VoteReject" });
+
+export const isReceiptHash = (h: string | null | undefined): h is string => !!h && /^[0-9a-f]{64}$/i.test(h);
+
+/** Council members from the Sputnik policy (Group roles). */
+export async function councilMembers(): Promise<string[]> {
+  const p = await viewCall<{ roles: { kind: unknown }[] }>(DAO_ID, "get_policy");
+  return p.roles.flatMap((r) => (r.kind && typeof r.kind === "object" && "Group" in r.kind ? (r.kind as { Group: string[] }).Group : []));
+}

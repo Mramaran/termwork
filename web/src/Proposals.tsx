@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DAO_ID, explorerAccount, type ProposalView } from "./chain";
+import { councilMembers, DAO_ID, explorerAccount, type ProposalView } from "./chain";
 import { connect, connectedAccount, disconnect, vote } from "./wallet";
 
 function kindLabel(kind: unknown): string {
@@ -19,10 +19,16 @@ export function Proposals({ proposals }: { proposals: ProposalView[] }) {
   const [account, setAccount] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [council, setCouncil] = useState<string[] | null>(null);
 
   useEffect(() => {
     void connectedAccount().then(setAccount);
   }, []);
+
+  useEffect(() => {
+    void councilMembers().then(setCouncil, () => setCouncil(null));
+  }, []);
+  const canVote = !!account && (council === null || council.includes(account));
 
   const open = proposals.filter((p) => p.status === "InProgress");
   const closed = proposals.filter((p) => p.status !== "InProgress").reverse();
@@ -77,13 +83,13 @@ export function Proposals({ proposals }: { proposals: ProposalView[] }) {
               <span className="small">by {p.proposer}</span>
             </div>
             <div className="pactions">
-              <button className="btn" disabled={!account || busy === `${p.id}`} onClick={() => void act(p.id, true)}>
+              <button className="btn" disabled={!canVote || busy === `${p.id}`} onClick={() => void act(p.id, true)}>
                 Approve
               </button>
-              <button className="btn danger" disabled={!account || busy === `${p.id}`} onClick={() => void act(p.id, false)}>
+              <button className="btn danger" disabled={!canVote || busy === `${p.id}`} onClick={() => void act(p.id, false)}>
                 Reject
               </button>
-              {!account && <span className="small">Sign in with a DAO council account to vote.</span>}
+              {!canVote && <span className="small">{account ? "This account is not on the DAO council." : "Sign in with a DAO council account to vote."}</span>}
             </div>
             <p className="small fallback">Or from a terminal: npm run -w scripts vote {p.id} approve|reject</p>
           </article>

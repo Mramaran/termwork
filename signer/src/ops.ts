@@ -32,6 +32,8 @@ const GAS: Record<OpName, bigint> = {
 
 const U128_MAX = (1n << 128n) - 1n;
 const ACCOUNT_RE = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+// MAX_REPORT_BYTES mirrors the contract. The other limits are signer-side hardening, not contract rules:
+// summary/rationale 2048 bytes, URL 2048 chars, receipt hash 128 chars.
 const MAX_REPORT_BYTES = 4096;
 const MAX_TEXT_BYTES = 2048;
 const MAX_URL_CHARS = 2048;
@@ -169,17 +171,27 @@ const PARSERS: Record<OpName, (args: unknown) => Record<string, unknown>> = {
  */
 export function buildOps(account: AccountLike | (() => AccountLike)): Ops {
   const get = typeof account === "function" ? account : () => account;
+  // Fresh Accounts share no nonce lock, so concurrent sends would read the same nonce. Run one
+  // transaction at a time; each still re-fetches its nonce (it starts after the previous one resolved).
+  let tail: Promise<unknown> = Promise.resolve();
+  const serialise = <T>(job: () => Promise<T>): Promise<T> => {
+    const run = tail.then(job, job);
+    tail = run.catch(() => undefined);
+    return run;
+  };
   const make = (name: OpName) => async (args: unknown): Promise<TxResult> => {
     const parsed = PARSERS[name](args);
-    const acct = get();
-    const outcome = await acct.callFunctionRaw({
-      contractId: acct.accountId,
-      methodName: name,
-      args: parsed,
-      gas: GAS[name],
-      deposit: 0n,
+    return serialise(async () => {
+      const acct = get();
+      const outcome = await acct.callFunctionRaw({
+        contractId: acct.accountId,
+        methodName: name,
+        args: parsed,
+        gas: GAS[name],
+        deposit: 0n,
+      });
+      return { txHash: outcome.transaction.hash };
     });
-    return { txHash: outcome.transaction.hash };
   };
   return {
     spend: make("spend"),

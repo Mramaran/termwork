@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { Account, KeyPair, KeyPairSigner, baseEncode } from "near-api-js";
 import { buildOps, ValidationError, type AccountLike, type Ops } from "../src/ops.js";
+import { loadConfig } from "@termwork/shared";
 import { createSignerServer, listenLocal } from "../src/server.js";
 
 const TOKEN = "test-token-not-secret-0123456789";
@@ -203,6 +204,65 @@ describe("signer", () => {
     expect(provider.viewAccessKey).toHaveBeenCalledTimes(3);
     const sent = provider.sendTransactionUntil.mock.calls.map((c: any) => c[0].transaction.nonce);
     expect(sent).toEqual([11n, 4n, 4n]);
+  });
+
+  it("serialises concurrent calls", async () => {
+    const events: string[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const provider = {
+      viewAccessKey: vi.fn(async () => {
+        events.push("nonce");
+        return { nonce: 1n, permission: "FullAccess", block_height: 1, block_hash: "x" };
+      }),
+      viewBlock: vi.fn(async () => ({ header: { hash: baseEncode(new Uint8Array(32).fill(7)) } })),
+      sendTransactionUntil: vi.fn(async () => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        events.push("send-start");
+        await new Promise((r) => setTimeout(r, 20));
+        events.push("send-end");
+        inFlight--;
+        return { transaction: { hash: "T" }, status: { SuccessValue: "" }, final_execution_status: "EXECUTED_OPTIMISTIC" };
+      }),
+    };
+    const signer = KeyPairSigner.fromSecretKey(SECRET_KEY as any);
+    const ops = buildOps(() => new Account(MANDATE, provider as any, signer));
+    const results = await Promise.all([ops.expire({}), ops.expire({}), ops.log_work({ clause_id: 0, summary: "x" })]);
+    expect(results.map((r) => r.txHash)).toEqual(["T", "T", "T"]);
+    expect(maxInFlight).toBe(1);
+    expect(events).toEqual(["nonce", "send-start", "send-end", "nonce", "send-start", "send-end", "nonce", "send-start", "send-end"]);
+  });
+
+  it("keeps serving after a failed call in the queue", async () => {
+    let n = 0;
+    const account: AccountLike = {
+      accountId: MANDATE,
+      callFunctionRaw: vi.fn(async () => {
+        if (n++ === 0) throw new Error("boom");
+        return { transaction: { hash: "OK" } } as any;
+      }),
+    };
+    const ops = buildOps(account);
+    const [a, b] = await Promise.allSettled([ops.expire({}), ops.expire({})]);
+    expect(a.status).toBe("rejected");
+    expect(b.status).toBe("fulfilled");
+  });
+
+  it("rejects non-testnet network", () => {
+    expect(() => loadConfig({ NEAR_NETWORK: "mainnet" })).toThrow(/testnet/);
+    expect(() => loadConfig({ NEAR_NETWORK: "" })).toThrow(/testnet/);
+    expect(loadConfig({}).NEAR_NETWORK).toBe("testnet");
+  });
+
+  it("rejects wrong method (405) and oversized body (413)", async () => {
+    const { account } = mockAccount();
+    const { address, post } = await start(buildOps(account));
+    const port = (servers[0]!.address() as AddressInfo).port;
+    const get = await fetch(`http://${address}:${port}/spend`, { headers: { authorization: `Bearer ${TOKEN}` } });
+    expect(get.status).toBe(405);
+    const big = await post("/log_work", { clause_id: 0, summary: "x".repeat(70 * 1024) });
+    expect(big.status).toBe(413);
   });
 
   it("binds to 127.0.0.1", async () => {

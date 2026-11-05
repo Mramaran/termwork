@@ -1,17 +1,14 @@
 import { JsonRpcProvider, nearToYocto as nearApiNearToYocto } from "near-api-js";
 import { loadConfig } from "./config.js";
 
-const RPC_URLS: Record<string, string> = {
-  testnet: "https://rpc.testnet.near.org",
-  mainnet: "https://rpc.mainnet.near.org",
-};
+const TESTNET_RPC_URL = "https://rpc.testnet.near.org";
 
 let cached: { network: string; provider: JsonRpcProvider } | undefined;
 
 export function getProvider(): JsonRpcProvider {
   const { NEAR_NETWORK } = loadConfig();
   if (!cached || cached.network !== NEAR_NETWORK) {
-    const url = process.env.NEAR_RPC_URL || RPC_URLS[NEAR_NETWORK]!;
+    const url = process.env.NEAR_RPC_URL || TESTNET_RPC_URL;
     cached = { network: NEAR_NETWORK, provider: new JsonRpcProvider({ url }) };
   }
   return cached.provider;

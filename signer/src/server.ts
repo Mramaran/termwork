@@ -26,7 +26,7 @@ function tokenOk(header: string | undefined, token: string): boolean {
   return ok && presented.length > 0;
 }
 
-function makeRedactor(secrets: string[]) {
+export function makeRedactor(secrets: string[]) {
   const needles = new Set<string>();
   for (const s of secrets) {
     if (!s) continue;
@@ -86,7 +86,7 @@ export function createSignerServer(ops: Ops, opts: SignerServerOptions): http.Se
         if (e instanceof ValidationError) {
           return send(res, 400, { error: redact(e.message) });
         }
-        const rpcError = redact(e instanceof Error ? e.message : String(e));
+        const rpcError = redact(e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ");
         console.error(`[signer] ${path} chain error: ${rpcError.slice(0, 300)}`);
         return send(res, 502, { error: "chain call failed", rpcError });
       }
@@ -108,10 +108,7 @@ export function listenLocal(server: http.Server, port: number): Promise<void> {
   });
 }
 
-const RPC_URLS: Record<string, string> = {
-  testnet: "https://rpc.testnet.near.org",
-  mainnet: "https://rpc.mainnet.near.org",
-};
+const TESTNET_RPC_URL = "https://rpc.testnet.near.org";
 
 async function main(): Promise<void> {
   try {
@@ -125,7 +122,7 @@ async function main(): Promise<void> {
   const factory = accountFactory({
     mandateId: cfg.MANDATE_ID,
     privateKey: cfg.AGENT_PRIVATE_KEY,
-    rpcUrl: process.env.NEAR_RPC_URL || RPC_URLS[cfg.NEAR_NETWORK]!,
+    rpcUrl: process.env.NEAR_RPC_URL || TESTNET_RPC_URL,
   });
   const server = createSignerServer(buildOps(factory), {
     token: cfg.SIGNER_TOKEN,
@@ -137,7 +134,9 @@ async function main(): Promise<void> {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((e) => {
-    console.error(`[signer] failed to start: ${e instanceof Error ? e.message : "unknown error"}`);
+    const redact = makeRedactor([process.env.AGENT_PRIVATE_KEY ?? "", process.env.SIGNER_TOKEN ?? ""]);
+    const msg = redact(e instanceof Error ? e.message : "unknown error").replace(/\s+/g, " ");
+    console.error(`[signer] failed to start: ${msg}`);
     process.exit(1);
   });
 }

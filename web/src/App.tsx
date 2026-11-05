@@ -5,6 +5,9 @@ import { Proposals } from "./Proposals";
 import { Renewal } from "./Renewal";
 import { Timeline } from "./Timeline";
 
+const POLL_MS = 15_000;
+const MAX_BACKOFF_MS = 120_000;
+
 function useNow(ms: number): number {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -37,25 +40,29 @@ export function App() {
       setError("VITE_MANDATE_ID is not set. Add VITE_MANDATE_ID and VITE_DAO_ID to .env and restart.");
       return;
     }
+    // Public testnet RPCs rate-limit bursts; one snapshot is ~20 calls, so poll
+    // every 15 s (one request at a time) and back off up to 2 min on errors.
     let live = true;
-    let inflight = false;
-    const tick = () => {
-      if (inflight) return Promise.resolve();
-      inflight = true;
-      return loadSnapshot()
-        .then(
-          (s) => live && (setSnap(s), setError(null)),
-          (e: Error) => live && setError(e.message),
-        )
-        .finally(() => {
-          inflight = false;
-        });
+    let delay = POLL_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      try {
+        const s = await loadSnapshot();
+        if (!live) return;
+        setSnap(s);
+        setError(null);
+        delay = POLL_MS;
+      } catch (e) {
+        if (!live) return;
+        delay = Math.min(delay * 2, MAX_BACKOFF_MS);
+        setError(`${(e as Error).message} (retrying in ${Math.round(delay / 1000)} s)`);
+      }
+      if (live) timer = setTimeout(tick, delay);
     };
     void tick();
-    const t = setInterval(tick, 5000);
     return () => {
       live = false;
-      clearInterval(t);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 

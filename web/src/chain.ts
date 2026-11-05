@@ -2,7 +2,9 @@
 import type { LogEntry, MandateView, Renewal, SpendRequest, Status } from "@termwork/shared";
 
 export const TESTNET_RPC_HOSTS = ["rpc.testnet.near.org", "archival-rpc.testnet.near.org", "test.rpc.fastnear.com", "rpc.testnet.fastnear.com"];
-export const DEFAULT_RPC = "https://rpc.testnet.near.org";
+// FastNEAR's testnet RPC tolerates browser polling; rpc.testnet.near.org rate-limits
+// bursts and its 429 replies lack CORS headers, which browsers report as "Failed to fetch".
+export const DEFAULT_RPC = "https://test.rpc.fastnear.com";
 
 export function rpcUrl(v: string | undefined): string {
   if (!v) return DEFAULT_RPC;

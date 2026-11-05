@@ -54,7 +54,7 @@ describe("chain helpers", () => {
   });
 
   it("rpcUrl only accepts allowlisted https hosts", () => {
-    expect(rpcUrl(undefined)).toBe("https://rpc.testnet.near.org");
+    expect(rpcUrl(undefined)).toBe("https://test.rpc.fastnear.com");
     expect(rpcUrl("https://rpc.testnet.fastnear.com")).toBe("https://rpc.testnet.fastnear.com");
     expect(() => rpcUrl("https://rpc.testnet.near.org.evil.com")).toThrow();
     expect(() => rpcUrl("http://rpc.testnet.near.org")).toThrow();

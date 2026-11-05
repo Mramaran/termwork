@@ -99,6 +99,14 @@ describe("validate", () => {
     const a = await validate(dec(), pr1, mandate, new Set(), async () => {
       throw new Error("rpc down");
     });
-    expect(a.kind).toBe("log");
+    expect(a).toMatchObject({ kind: "log", clauseId: 4, summary: "recipient check failed (rpc): rpc down" });
+  });
+  it("max_request branch is hit independently of clause max", async () => {
+    const m = {
+      ...mandate,
+      mission: { title: "t", clauses: [{ id: 3, text: "big", max_amount: near(50), pays: true }] },
+    };
+    const a = await validate(dec({ clause_id: 3, amount_near: "0.6" }), pr4, m, new Set(), yes);
+    expect(a).toMatchObject({ kind: "log", summary: "rejected decision: amount exceeds max_request" });
   });
 });

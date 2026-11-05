@@ -81,7 +81,13 @@ export async function validate(
       return log(clause.id, "rejected decision: amount exceeds clause maximum");
     if (amount > BigInt(m.max_request)) return log(clause.id, "rejected decision: amount exceeds max_request");
 
-    if (!(await exists(pr.nearAccount))) return log(4, "recipient account does not exist");
+    let found: boolean;
+    try {
+      found = await exists(pr.nearAccount);
+    } catch (e) {
+      return log(4, `recipient check failed (rpc): ${(e as Error).message}`);
+    }
+    if (!found) return log(4, "recipient account does not exist");
 
     const amountYocto = amount.toString();
     if (amount > BigInt(m.spend_threshold))

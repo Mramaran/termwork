@@ -79,8 +79,12 @@ describe("config", () => {
     expect(loadConfig({ AGENT_MODE: "fixture" } as NodeJS.ProcessEnv).AGENT_MODE).toBe("fixture");
     expect(() => loadConfig({ AGENT_MODE: "magic" } as NodeJS.ProcessEnv)).toThrow(/AGENT_MODE/);
   });
-  it("accepts the fastnear testnet RPC host and still rejects non-testnet hosts", () => {
-    expect(loadConfig({ NEAR_RPC_URL: "https://test.rpc.fastnear.com" } as NodeJS.ProcessEnv).NEAR_RPC_URL).toBe("https://test.rpc.fastnear.com");
-    expect(() => loadConfig({ NEAR_RPC_URL: "https://rpc.mainnet.near.org" } as NodeJS.ProcessEnv)).toThrow(/testnet/);
+  it("accepts only allowlisted testnet RPC hosts", () => {
+    for (const h of ["rpc.testnet.near.org", "archival-rpc.testnet.near.org", "test.rpc.fastnear.com", "rpc.testnet.fastnear.com"]) {
+      expect(loadConfig({ NEAR_RPC_URL: `https://${h}` } as NodeJS.ProcessEnv).NEAR_RPC_URL).toBe(`https://${h}`);
+    }
+    for (const bad of ["https://test.evil.example", "https://testnet.evil.example", "https://test.rpc.mainnet.near.org", "https://rpc.mainnet.near.org", "http://rpc.testnet.near.org", "https://rpc.testnet.near.org.evil.example"]) {
+      expect(() => loadConfig({ NEAR_RPC_URL: bad } as NodeJS.ProcessEnv)).toThrow(/NEAR_RPC_URL/);
+    }
   });
 });

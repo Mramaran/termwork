@@ -1,9 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { testnetRpcUrl } from "@termwork/shared";
 import { Account, JsonRpcProvider, KeyPair, type KeyPairString } from "near-api-js";
 
-export const TESTNET_RPC = process.env.NEAR_RPC_URL ?? "https://test.rpc.fastnear.com";
+// Same allowlist as the agent and signer, checked before any funds are spent.
+export const TESTNET_RPC = testnetRpcUrl(process.env.NEAR_RPC_URL ?? "https://test.rpc.fastnear.com");
 // The shared config (used by the agent and the chain views) reads the same variable; keep every component on one endpoint.
 process.env.NEAR_RPC_URL = TESTNET_RPC;
 // helper.testnet.near.org is retired; this is the faucet endpoint near-cli-rs uses today.

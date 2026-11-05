@@ -115,15 +115,17 @@ export async function waitFor<T>(
   everyMs = 2_500,
 ): Promise<T> {
   const end = Date.now() + timeoutMs;
+  let lastError = "";
   for (;;) {
     let v: T | undefined | false | null;
     try {
       v = await fn();
-    } catch {
-      v = undefined; // transient rpc errors: keep polling until the deadline
+    } catch (e) {
+      lastError = (e as Error).message; // transient rpc errors: keep polling until the deadline
+      v = undefined;
     }
     if (v) return v;
-    if (Date.now() > end) throw new Error(`timed out waiting for ${label}`);
+    if (Date.now() > end) throw new Error(`timed out waiting for ${label}${lastError ? ` (last error: ${lastError.slice(0, 200)})` : ""}`);
     await sleep(everyMs);
   }
 }

@@ -138,7 +138,6 @@ async function main(): Promise<void> {
   const termEndMs = hire.termEndMs;
   const mandateView = await view<MandateView>(mandateId, "get_mandate");
   must(mandateView.status === "Active", "mandate is Active");
-  const daoBeforeFire = { value: 0n };
 
   // the signer (in this process, loopback only) and the agent
   const token = randomBytes(24).toString("hex");
@@ -180,14 +179,17 @@ async function main(): Promise<void> {
     }
   };
 
-  try {
+  {
     // 5. agent works the fixtures
     await step("5. agent run on fixtures: payments, one big request, one skip", async () => {
       await runTicks(
         async () => {
           const log = await readLog(mandateId);
           const k = (kind: string) => log.filter((e) => e.kind === kind).length;
-          return k("Paid") >= 3 && k("Requested") >= 1 && k("Work") >= 1;
+          if (mode === "fixture") return k("Paid") >= 3 && k("Requested") >= 1 && k("Work") >= 1;
+          // live: the model decides, so wait until every fixture PR has an outcome on-chain
+          const handled = new Set(log.filter((e) => ["Paid", "Requested", "Work"].includes(e.kind)).map((e) => e.evidence_url));
+          return k("Paid") >= 1 && handled.size >= 5;
         },
         "fixture run",
         Math.max(60_000, TERM_SECS * 500),
@@ -195,26 +197,29 @@ async function main(): Promise<void> {
     });
     const log5 = await readLog(mandateId);
     const paid = log5.filter((e) => e.kind === "Paid");
-    must(paid.length >= 3, `at least 3 Paid entries on-chain (${paid.length})`);
+    must(paid.length >= (mode === "fixture" ? 3 : 1), `at least ${mode === "fixture" ? 3 : 1} Paid entries on-chain (${paid.length})`);
     must(paid.every((e) => e.recipient && Object.values(state.contributors).includes(e.recipient) && e.receipt_hash), "paid entries name a demo contributor and carry a receipt hash");
     const requested = log5.filter((e) => e.kind === "Requested");
-    must(requested.length === 1, "exactly 1 Requested entry (the big reward)");
-    must(log5.some((e) => e.kind === "Work" && (e.note ?? "").includes("not a first-time")), "1 skip logged (not a first-time contributor)");
+    if (mode === "fixture") {
+      // exact counts are only guaranteed for the deterministic rule table
+      must(requested.length === 1, "exactly 1 Requested entry (the big reward)");
+      must(log5.some((e) => e.kind === "Work" && (e.note ?? "").includes("not a first-time")), "1 skip logged (not a first-time contributor)");
+    } else console.log(`  live decisions: ${paid.length} Paid, ${requested.length} Requested`);
     for (const e of paid) {
       const r = await balanceOf(e.recipient!);
       must(r >= near("0.2"), `payment landed: ${e.recipient} holds ${fmtNear(r)} NEAR`);
     }
 
     // 6. the DAO votes the big spend down
-    const requests = await view<SpendRequest[]>(mandateId, "get_requests");
-    const req = requests[0]!;
-    must(req.proposal_id !== null, "big-spend request has a DAO proposal id");
-    out.proposals.bigSpend = req.proposal_id!;
-    const rej = await step("6. DAO votes down the big spend", () => decide(state, req.proposal_id!, false));
-    rej.hashes.forEach((h, i) => tx(`bigSpend.reject${i + 1}`, h));
-    must(rej.status === "Rejected", "DAO rejected the big-spend proposal");
-    const recipientBefore = await balanceOf(req.recipient);
-    must(recipientBefore < near("0.5"), "rejected big spend moved no money");
+    const req = (await view<SpendRequest[]>(mandateId, "get_requests"))[0];
+    if (req) {
+      must(req.proposal_id !== null, "big-spend request has a DAO proposal id");
+      out.proposals.bigSpend = req.proposal_id!;
+      const rej = await step("6. DAO votes down the big spend", () => decide(state, req.proposal_id!, false));
+      rej.hashes.forEach((h, i) => tx(`bigSpend.reject${i + 1}`, h));
+      must(rej.status === "Rejected", "DAO rejected the big-spend proposal");
+      must((await balanceOf(req.recipient)) < near("0.5"), "rejected big spend moved no money");
+    } else console.log("  no big-spend request this run (the live model chose differently); skipping the vote-down step");
 
     // 7. renewal case
     await step("7. agent files its renewal case", async () => {
@@ -233,11 +238,13 @@ async function main(): Promise<void> {
 
     // receipts are honestly labelled
     const idx = JSON.parse(readFileSync(join(DEFAULT_RECEIPTS_DIR, "index.json"), "utf8")) as Record<string, string>;
-    const sample = JSON.parse(readFileSync(join(DEFAULT_RECEIPTS_DIR, `${idx[paid[0]!.evidence_url!]}.json`), "utf8")) as InferenceReceipt;
-    if (mode === "fixture") must(sample.model === "fixture-rules" && sample.verified === false && sample.verifiedScope === "none", "fixture receipts say model fixture-rules, verified false");
+    const stored = [...new Set(Object.values(idx))].map((h) => JSON.parse(readFileSync(join(DEFAULT_RECEIPTS_DIR, `${h}.json`), "utf8")) as InferenceReceipt);
+    if (mode === "fixture") must(stored.every((r) => r.model === "fixture-rules" && r.verified === false && r.verifiedScope === "none"), "fixture receipts say model fixture-rules, verified false");
+    else {
+      must(stored.length > 0 && stored.every((r) => !!r.model && r.model !== "fixture-rules" && !!r.verifiedScope), "every stored receipt names a real model and sets verifiedScope");
+      console.log(`  receipts with verified:true: ${stored.filter((r) => r.verified).length} of ${stored.length}`);
+    }
     must(existsSync(join(DEFAULT_RECEIPTS_DIR, `${paid[0]!.receipt_hash}.json`)), "on-chain receipt hash resolves to a stored receipt");
-  } finally {
-    // the agent loop is just the loops above; nothing keeps running between steps
   }
 
   // 8. term ends; a late spend lands on-chain and fails with "term ended"
@@ -260,7 +267,7 @@ async function main(): Promise<void> {
   must((await view<string>(mandateId, "get_status")) === "Active", "status was still Active when the late spend failed (expire had not run)");
 
   // 9. fire and sweep
-  daoBeforeFire.value = await balanceOf(state.daoId);
+  const daoBeforeFire = await balanceOf(state.daoId);
   const fire = await step("9. DAO votes fire", () => fireAgent(state, "demo: term ended, not renewing"));
   out.proposals.fire = fire.proposalId;
   tx("fire.propose", fire.proposeHash);
@@ -281,7 +288,7 @@ async function main(): Promise<void> {
   const reserve = BigInt(acct.storage_usage) * 10n ** 19n + near("0.1");
   must(BigInt(acct.amount) <= reserve + near("0.02"), `mandate balance ${fmtNear(BigInt(acct.amount))} NEAR is within storage + buffer (${fmtNear(reserve)})`);
   const daoAfter = await balanceOf(state.daoId);
-  const returned = daoAfter - daoBeforeFire.value;
+  const returned = daoAfter - daoBeforeFire;
   out.returnedToDaoNear = fmtNear(returned);
   must(returned > 0n, `DAO balance increased (${fmtNear(returned)} NEAR returned)`);
   const requestAfter = (await view<SpendRequest[]>(mandateId, "get_requests"))[0]!;
@@ -298,7 +305,7 @@ async function main(): Promise<void> {
     }),
   );
   const errText = attempt.json.rpcError ?? "";
-  const match = /InvalidAccessKey|AccessKeyNotFound|AccessKeyDoesNotExist|does not exist/i.exec(errText);
+  const match = /AccessKeyDoesNotExist|InvalidAccessKey|AccessKeyNotFound|access key .*does not exist/i.exec(errText);
   must(attempt.status === 502 && match, "agent attempt rejected: deleted key");
   // The RPC reports a deleted key as InvalidAccessKey/AccessKeyNotFound; near-api-js words the same error "Access key ... does not exist".
   const resultName = /InvalidAccessKey/i.test(errText) ? "InvalidAccessKey" : "InvalidAccessKey (access key does not exist)";

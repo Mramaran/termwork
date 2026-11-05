@@ -32,7 +32,16 @@ function oneOf<T extends string>(name: string, v: string, allowed: readonly T[])
 
 export const DEFAULT_TESTNET_RPC_URL = "https://rpc.testnet.near.org";
 
-function testnetRpcUrl(v: string | undefined): string {
+/** The only RPC hosts this project will talk to. An exact list: substring or prefix checks admit lookalike hosts. */
+export const TESTNET_RPC_HOSTS: readonly string[] = [
+  "rpc.testnet.near.org",
+  "archival-rpc.testnet.near.org",
+  "test.rpc.fastnear.com",
+  "rpc.testnet.fastnear.com",
+];
+
+/** Returns the URL (or the default when empty) if it is an https URL on the testnet allowlist; throws otherwise. */
+export function testnetRpcUrl(v: string | undefined): string {
   if (!v) return DEFAULT_TESTNET_RPC_URL;
   let u: URL;
   try {
@@ -40,9 +49,8 @@ function testnetRpcUrl(v: string | undefined): string {
   } catch {
     throw new Error("NEAR_RPC_URL is not a valid URL");
   }
-  const host = u.hostname.toLowerCase();
-  if (u.protocol !== "https:" || !(host.includes("testnet") || host.startsWith("test."))) {
-    throw new Error("NEAR_RPC_URL must be an https URL whose host contains \"testnet\" or starts with \"test.\" (this project is testnet only)");
+  if (u.protocol !== "https:" || !TESTNET_RPC_HOSTS.includes(u.hostname.toLowerCase())) {
+    throw new Error(`NEAR_RPC_URL host must be one of: ${TESTNET_RPC_HOSTS.join(", ")} (this project is testnet only)`);
   }
   return v;
 }

@@ -1,17 +1,46 @@
 //! Sandbox lifecycle tests: the mandate contract against the real Sputnik DAO
 //! wasm (the code the testnet factory deploys by default, see tests/res/README.md).
 //!
-//! Build the mandate wasm first: `cargo near build non-reproducible-wasm`.
+//! The mandate wasm is built from source at test time via cargo-near; see mandate_wasm().
 
 use near_sdk::json_types::Base64VecU8;
 use near_workspaces::types::{Gas, KeyType, NearToken, SecretKey};
 use near_workspaces::{network::Sandbox, Account, Contract, Worker};
 use serde_json::{json, Value};
 
-const MANDATE_WASM: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/target/near/termwork_mandate.wasm"
-);
+static MANDATE_WASM: tokio::sync::OnceCell<Vec<u8>> = tokio::sync::OnceCell::const_new();
+
+/// Builds the mandate with `cargo near build non-reproducible-wasm` once per test run,
+/// so the tests never use stale code. (A plain `cargo build` wasm loses panic messages,
+/// so the cargo-near build is required: `cargo install cargo-near`.)
+async fn mandate_wasm() -> &'static [u8] {
+    MANDATE_WASM
+        .get_or_init(|| async {
+            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+            let out = tokio::process::Command::new(
+                std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()),
+            )
+            .args(["near", "build", "non-reproducible-wasm"])
+            .current_dir(root)
+            .output()
+            .await
+            .expect("could not run `cargo near build`; install it with `cargo install cargo-near`");
+            assert!(
+                out.status.success(),
+                "`cargo near build non-reproducible-wasm` failed in contracts/mandate                  (install cargo-near and the wasm32-unknown-unknown target):
+{}{}",
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let target = std::env::var_os("CARGO_TARGET_DIR")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| root.join("target"));
+            std::fs::read(target.join("near/termwork_mandate.wasm"))
+                .expect("mandate wasm missing after `cargo near build non-reproducible-wasm`")
+        })
+        .await
+}
+
 const SPUTNIK_WASM: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/res/sputnikdao2.wasm");
 
 const BOND_YOCTO: u128 = 100_000_000_000_000_000_000_000; // 0.1 NEAR
@@ -109,7 +138,7 @@ impl Env {
             .await?
             .into_result()?;
         let mandate = mandate_acc
-            .deploy(&std::fs::read(MANDATE_WASM)?)
+            .deploy(mandate_wasm().await)
             .await?
             .into_result()?;
         mandate
@@ -404,7 +433,6 @@ async fn full_lifecycle_fire() -> anyhow::Result<()> {
         .await
         .expect_err("a deleted key must be refused");
     let text = format!("{err:?}");
-    println!("DELETED_KEY_ERROR: {text}");
     assert!(
         text.contains("InvalidAccessKeyError") && text.contains("AccessKeyNotFound"),
         "unexpected error: {text}"
@@ -534,7 +562,6 @@ async fn approved_spend_after_fire_fails() -> anyhow::Result<()> {
     e.decide(spend_pid, "VoteApprove").await?;
     e.worker.fast_forward(3).await?;
     let status = e.proposal_status(spend_pid).await?;
-    println!("SPEND_PROPOSAL_STATUS_AFTER_FIRE: {status}");
     assert_eq!(status, "Failed", "a fired agent's spend must not execute");
     assert_eq!(e.balance(e.payee.id()).await?, payee_before);
     let reqs: Vec<Value> = e.mandate.view("get_requests").await?.json()?;

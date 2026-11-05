@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { Account, KeyPair, KeyPairSigner, baseEncode } from "near-api-js";
-import { buildOps, ValidationError, type AccountLike, type Ops } from "../src/ops.js";
+import { buildOps, OutcomeUnknownError, ValidationError, type AccountLike, type Ops } from "../src/ops.js";
 import { loadConfig } from "@termwork/shared";
 import { createSignerServer, listenLocal } from "../src/server.js";
 
@@ -263,19 +263,54 @@ describe("signer", () => {
     expect(loadConfig({}).NEAR_RPC_URL).toBe("https://rpc.testnet.near.org");
   });
 
-  it("times out a hung job without blocking the queue", async () => {
-    let n = 0;
-    const account: AccountLike = {
-      accountId: MANDATE,
-      callFunctionRaw: vi.fn(async () => {
-        if (n++ === 0) return new Promise<never>(() => {});
-        return { transaction: { hash: "OK" } } as any;
+  it("timeout returns 504 but holds the queue until the send settles", async () => {
+    const events: string[] = [];
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let releaseFirst!: () => void;
+    let sends = 0;
+    const provider = {
+      viewAccessKey: vi.fn(async () => {
+        events.push("nonce");
+        return { nonce: 1n, permission: "FullAccess", block_height: 1, block_hash: "x" };
+      }),
+      viewBlock: vi.fn(async () => ({ header: { hash: baseEncode(new Uint8Array(32).fill(7)) } })),
+      sendTransactionUntil: vi.fn(async () => {
+        const mine = ++sends;
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        events.push("send-start");
+        if (mine === 1) await new Promise<void>((r) => (releaseFirst = r));
+        events.push("send-end");
+        inFlight--;
+        return { transaction: { hash: "T" + mine }, status: { SuccessValue: "" }, final_execution_status: "EXECUTED_OPTIMISTIC" };
       }),
     };
-    const ops = buildOps(account, { jobTimeoutMs: 50 });
-    const [a, b] = await Promise.allSettled([ops.expire({}), ops.expire({})]);
-    expect(a.status).toBe("rejected");
-    expect(b.status).toBe("fulfilled");
+    const signer = KeyPairSigner.fromSecretKey(SECRET_KEY as any);
+    const ops = buildOps(() => new Account(MANDATE, provider as any, signer), { jobTimeoutMs: 50 });
+    const first = ops.expire({});
+    const firstResult = first.then(() => "ok", (e) => e);
+    const second = ops.expire({});
+    expect(await firstResult).toBeInstanceOf(OutcomeUnknownError);
+    // First caller has its timeout answer, but the second job has not touched the chain yet.
+    expect(events).toEqual(["nonce", "send-start"]);
+    expect(provider.viewAccessKey).toHaveBeenCalledTimes(1);
+    releaseFirst();
+    expect((await second).txHash).toBe("T2");
+    expect(events).toEqual(["nonce", "send-start", "send-end", "nonce", "send-start", "send-end"]);
+    expect(maxInFlight).toBe(1);
+  });
+
+  it("returns 504 over HTTP when the outcome is unknown", async () => {
+    const { post } = await start({
+      ...buildOps(mockAccount().account),
+      expire: async () => {
+        throw new OutcomeUnknownError();
+      },
+    });
+    const res = await post("/expire", {});
+    expect(res.status).toBe(504);
+    expect(((await res.json()) as { error: string }).error).toContain("outcome unknown");
   });
 
   it("rejects wrong method (405) and oversized body (413)", async () => {

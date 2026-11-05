@@ -2,7 +2,7 @@ import http from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { loadConfig, requireConfig } from "@termwork/shared";
-import { accountFactory, buildOps, ValidationError, type OpName, type Ops } from "./ops.js";
+import { accountFactory, buildOps, OutcomeUnknownError, ValidationError, type OpName, type Ops } from "./ops.js";
 
 const HOST = "127.0.0.1";
 const MAX_BODY_BYTES = 64 * 1024;
@@ -83,6 +83,10 @@ export function createSignerServer(ops: Ops, opts: SignerServerOptions): http.Se
         console.log(`[signer] ${path} ok tx=${txHash}`);
         return send(res, 200, { txHash });
       } catch (e) {
+        if (e instanceof OutcomeUnknownError) {
+          console.error(`[signer] ${path} outcome unknown (timeout)`);
+          return send(res, 504, { error: "outcome unknown — check chain before retrying" });
+        }
         if (e instanceof ValidationError) {
           return send(res, 400, { error: redact(e.message) });
         }
@@ -107,8 +111,6 @@ export function listenLocal(server: http.Server, port: number): Promise<void> {
     });
   });
 }
-
-const TESTNET_RPC_URL = "https://rpc.testnet.near.org";
 
 async function main(): Promise<void> {
   try {

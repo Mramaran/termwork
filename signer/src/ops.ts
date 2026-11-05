@@ -3,6 +3,13 @@ import { Account, KeyPairSigner, JsonRpcProvider } from "near-api-js";
 /** Thrown for any malformed request. The server maps it to HTTP 400. */
 export class ValidationError extends Error {}
 
+/** The send did not settle in time; it may still land. The caller must re-read chain state before retrying. */
+export class OutcomeUnknownError extends Error {
+  constructor() {
+    super("outcome unknown");
+  }
+}
+
 /** The slice of near-api-js Account the signer uses. Everything is called on the mandate, by the mandate. */
 export type AccountLike = Pick<Account, "accountId" | "callFunctionRaw">;
 
@@ -176,15 +183,26 @@ export function buildOps(account: AccountLike | (() => AccountLike), opts: { job
   // transaction at a time; each still re-fetches its nonce (it starts after the previous one resolved).
   let tail: Promise<unknown> = Promise.resolve();
   const serialise = <T>(job: () => Promise<T>): Promise<T> => {
-    // A hung send must not block signing forever: each job gets a deadline (the send itself is not cancelled).
-    const guarded = () =>
-      new Promise<T>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error(`transaction timed out after ${jobTimeoutMs} ms`)), jobTimeoutMs);
-        job().then(resolve, reject).finally(() => clearTimeout(timer));
-      });
-    const run = tail.then(guarded, guarded);
-    tail = run.catch(() => undefined);
-    return run;
+    // The queue is held until the underlying send actually settles, even after the caller timed out,
+    // so there is never more than one transaction in flight (no nonce reuse, no double submit).
+    let started!: () => void;
+    const startedP = new Promise<void>((r) => (started = r));
+    const settled = tail.then(() => {
+      started();
+      return job();
+    });
+    tail = settled.catch(() => undefined);
+    // The caller gets a timely answer measured from when its job starts: outcome unknown, not failure.
+    return startedP.then(
+      () =>
+        new Promise<T>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new OutcomeUnknownError()), jobTimeoutMs);
+          settled.then(
+            (v) => (clearTimeout(timer), resolve(v)),
+            (e) => (clearTimeout(timer), reject(e)),
+          );
+        }),
+    );
   };
   const make = (name: OpName) => async (args: unknown): Promise<TxResult> => {
     const parsed = PARSERS[name](args);

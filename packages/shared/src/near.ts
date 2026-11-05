@@ -1,8 +1,6 @@
 import { JsonRpcProvider, nearToYocto as nearApiNearToYocto } from "near-api-js";
 import { loadConfig } from "./config.js";
 
-const TESTNET_RPC_URL = "https://rpc.testnet.near.org";
-
 let cached: { network: string; provider: JsonRpcProvider } | undefined;
 
 export function getProvider(): JsonRpcProvider {

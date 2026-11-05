@@ -156,11 +156,19 @@ export async function tick(d: LoopDeps): Promise<TickResult> {
     return { stopped: true };
   }
 
-  const [log, requests, prs] = await Promise.all([readFullLog(d), d.getRequests(), d.source.listMerged()]);
+  const [log, requests] = await Promise.all([readFullLog(d), d.getRequests()]);
   const handled = handledSet(log, requests);
+  const seen = new Set<string>();
+  let prs: PullRequestFact[] = [];
+  try {
+    prs = await d.source.listMerged();
+  } catch (e) {
+    d.log(`source failed: ${(e as Error).message}`);
+  }
 
   for (const pr of prs) {
-    if (handled.has(pr.url)) continue;
+    if (handled.has(pr.url) || seen.has(pr.url)) continue;
+    seen.add(pr.url);
     try {
       const out = await d.decide(pr, m);
       if (!out) continue;
@@ -176,7 +184,10 @@ export async function tick(d: LoopDeps): Promise<TickResult> {
   if (now >= windowStart) {
     const renewal = await d.getRenewal();
     const filedThisTerm = renewal !== null && renewal.timestamp_ms >= m.term_start_ms;
-    if (!filedThisTerm) await fileRenewal(d, m, Math.floor(termMs / 1000));
+    const rejectedThisTerm = (await readFullLog(d)).some(
+      (e) => e.kind === "Work" && e.timestamp_ms >= m.term_start_ms && (e.note ?? "").startsWith("renewal report rejected"),
+    );
+    if (!filedThisTerm && !rejectedThisTerm) await fileRenewal(d, m, Math.floor(termMs / 1000));
   }
   return { stopped: false };
 }
@@ -191,6 +202,7 @@ export function realDeps(cfg: Config, source: SourceAdapter): LoopDeps {
     const r = await complete(messages, cfg.NEARAI_API_KEY);
     return { text: r.text, hash: saveReceipt(r.receipt, undefined, key) };
   };
+  const logLine = (line: string) => console.log(`[${new Date().toISOString()}] ${line}`);
   return {
     now: () => Date.now(),
     getMandate: () => viewMandate<MandateView>("get_mandate"),
@@ -201,13 +213,13 @@ export function realDeps(cfg: Config, source: SourceAdapter): LoopDeps {
     exists: accountExists,
     decide: async (pr, m) => {
       const out = await modelOutput(decisionMessages(m, pr), pr.url);
-      if (!out) console.log(`no stored receipt for ${pr.url}`);
+      if (!out) logLine(`no stored receipt for ${pr.url}`);
       return out;
     },
     generateReport: async (m, log, previousError) => {
       const key = `renewal:${m.term_number}`;
       const out = await modelOutput(reportMessages(m, log, previousError), key);
-      if (!out) console.log(`no stored receipt for ${key}`);
+      if (!out) logLine(`no stored receipt for ${key}`);
       return out;
     },
     signer: {
@@ -226,6 +238,6 @@ export function realDeps(cfg: Config, source: SourceAdapter): LoopDeps {
         return { status: res.status, json };
       },
     },
-    log: (line) => console.log(`[${new Date().toISOString()}] ${line}`),
+    log: logLine,
   };
 }

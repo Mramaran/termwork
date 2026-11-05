@@ -236,4 +236,33 @@ describe("renewal", () => {
     expect(calls[0]!.body.summary).toMatch(/^renewal report rejected: /);
     expect(calls[0]!.body.evidence_url).toBeNull();
   });
+
+  it("does not retry renewal after a rejection note in the same term", async () => {
+    const generateReport = vi.fn(async () => ({ text: "Paid dev1 [#0].", hash: "hr" }));
+    const { d, calls } = deps({
+      ...inWindow,
+      generateReport,
+      getWorkLog: async () => [
+        entry(0),
+        entry(1, { kind: "Work", note: "renewal report rejected: no citations", timestamp_ms: 700_000 }),
+      ],
+    });
+    await tick(d);
+    expect(generateReport).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still files renewal when listMerged fails", async () => {
+    const { d, calls } = deps({ ...inWindow, source: { listMerged: async () => { throw new Error("gh down"); } } });
+    await tick(d);
+    expect(calls.map((c) => c.path)).toEqual(["/propose_renewal"]);
+  });
+});
+
+describe("duplicates", () => {
+  it("acts once on a duplicate PR url within one tick", async () => {
+    const { d, calls } = deps({ source: { listMerged: async () => [pr(1), pr(1)] } });
+    await tick(d);
+    expect(calls).toHaveLength(1);
+  });
 });

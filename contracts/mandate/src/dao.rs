@@ -18,6 +18,18 @@ pub fn add_proposal(
     args: Vec<u8>,
     bond: NearToken,
 ) -> Promise {
+    add_proposal_with_deposit(dao_id, description, method, args, bond, NearToken::from_yoctonear(0))
+}
+
+/// Like `add_proposal`, but the approved call attaches `action_deposit` from the DAO.
+pub fn add_proposal_with_deposit(
+    dao_id: AccountId,
+    description: String,
+    method: &str,
+    args: Vec<u8>,
+    bond: NearToken,
+    action_deposit: NearToken,
+) -> Promise {
     let body = json!({
         "proposal": {
             "description": description,
@@ -27,7 +39,7 @@ pub fn add_proposal(
                     "actions": [{
                         "method_name": method,
                         "args": Base64VecU8::from(args),
-                        "deposit": "0",
+                        "deposit": action_deposit.as_yoctonear().to_string(),
                         "gas": GAS_PROPOSAL_ACTION,
                     }]
                 }

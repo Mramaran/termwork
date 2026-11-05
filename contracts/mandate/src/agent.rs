@@ -1,5 +1,6 @@
 use near_sdk::json_types::U128;
-use near_sdk::{env, near, require, AccountId, NearToken, Promise};
+use near_sdk::serde_json::json;
+use near_sdk::{env, near, require, AccountId, NearToken, Promise, PromiseError};
 
 use crate::types::*;
 use crate::*;
@@ -83,5 +84,85 @@ impl Mandate {
             note: Some(summary),
             timestamp_ms: now_ms(),
         });
+    }
+
+    /// Agent writes its own renewal case inside the last 30% of the term and
+    /// files it as a DAO proposal.
+    pub fn propose_renewal(
+        &mut self,
+        report_text: String,
+        requested_term_secs: u64,
+        requested_topup: U128,
+    ) -> Promise {
+        self.assert_agent_active();
+        require!(report_text.len() <= MAX_REPORT_BYTES, "report too long");
+        require!(requested_term_secs > 0, "term must be positive");
+        let now = now_ms();
+        let term_ms = self.term_end_ms - self.term_start_ms;
+        let window_start = self.term_end_ms - term_ms * RENEWAL_WINDOW_PCT / 100;
+        require!(now >= window_start, "renewal window not open");
+        require!(
+            self.proposal_bond <= self.budget_available(),
+            "insufficient budget"
+        );
+
+        let report_hash: String = env::sha256(report_text.as_bytes())
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
+        self.renewal = Some(Renewal {
+            report_text,
+            report_hash: report_hash.clone(),
+            requested_term_secs,
+            requested_topup,
+            proposal_id: None,
+            timestamp_ms: now,
+        });
+        self.push_log(LogEntry {
+            index: 0,
+            kind: EntryKind::RenewalProposed,
+            clause_id: None,
+            amount: Some(requested_topup),
+            recipient: None,
+            evidence_url: None,
+            receipt_hash: Some(report_hash.clone()),
+            note: Some(format!("{requested_term_secs} s requested")),
+            timestamp_ms: now,
+        });
+
+        let description = format!(
+            "Termwork: renewal for term #{} — report hash {}",
+            self.term_number, report_hash
+        );
+        let args = json!({ "term_secs": requested_term_secs, "agent_public_key": null })
+            .to_string()
+            .into_bytes();
+        crate::dao::add_proposal_with_deposit(
+            self.dao_id.clone(),
+            description,
+            "renew",
+            args,
+            NearToken::from_yoctonear(self.proposal_bond),
+            NearToken::from_yoctonear(requested_topup.0),
+        )
+        .then(Promise::new(env::current_account_id()).function_call(
+            "on_renewal_proposal_added".to_string(),
+            b"{}".to_vec(),
+            NearToken::from_yoctonear(0),
+            crate::dao::GAS_CALLBACK,
+        ))
+    }
+
+    #[private]
+    pub fn on_renewal_proposal_added(
+        &mut self,
+        #[callback_result] r: Result<u64, PromiseError>,
+    ) {
+        if let Some(rn) = self.renewal.as_mut() {
+            match r {
+                Ok(id) => rn.proposal_id = Some(id),
+                Err(_) => self.renewal = None,
+            }
+        }
     }
 }

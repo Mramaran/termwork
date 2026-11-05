@@ -7,6 +7,7 @@ use near_sdk::{
 pub mod agent;
 pub mod dao;
 pub mod employer;
+pub mod public;
 pub mod types;
 
 pub use types::*;
@@ -38,6 +39,8 @@ pub struct Mandate {
     pub term_end_ms: u64,
     pub term_number: u32,
     pub agent_key: Option<PublicKey>,
+    /// Key removed by expire/fire; lets a later `renew` re-add it when none is passed.
+    pub retired_key: Option<PublicKey>,
     pub budget_spent: u128,
     pub work_log: Vector<LogEntry>,
     pub paid_refs: LookupSet<String>,
@@ -65,6 +68,7 @@ impl Mandate {
             term_end_ms: 0,
             term_number: 0,
             agent_key: None,
+            retired_key: None,
             budget_spent: 0,
             work_log: Vector::new(StorageKey::WorkLog),
             paid_refs: LookupSet::new(StorageKey::PaidRefs),
@@ -592,5 +596,217 @@ mod tests {
         assert_eq!(log[1].note.as_deref(), Some("did a thing"));
         assert_eq!(log[1].evidence_url.as_deref(), Some("https://e/w"));
         assert_eq!(c.budget_spent, 0);
+    }
+
+    // ---- Task 5: renewal, renew, fire, expire, sweep, release ----
+
+    fn dao_at(ts_ns: u64, deposit: NearToken) {
+        let mut b = VMContextBuilder::new();
+        b.current_account_id("agent.testnet".parse().unwrap())
+            .predecessor_account_id(dao())
+            .attached_deposit(deposit)
+            .account_balance(NearToken::from_near(5))
+            .block_timestamp(ts_ns);
+        testing_env!(b.build());
+    }
+    fn secs(n: u64) -> u64 {
+        n * 1_000_000_000
+    }
+
+    #[test]
+    #[should_panic(expected = "renewal window not open")]
+    fn propose_renewal_rejects_before_window() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS + secs(100));
+        let _ = c.propose_renewal("report".into(), 600, near_amt(500));
+    }
+
+    #[test]
+    #[should_panic(expected = "report too long")]
+    fn propose_renewal_rejects_oversized_report() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS + secs(250));
+        let _ = c.propose_renewal("a".repeat(4097), 600, near_amt(500));
+    }
+
+    #[test]
+    fn propose_renewal_stores_text_and_hash() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS + secs(250));
+        let _ = c.propose_renewal("hello".into(), 600, near_amt(500));
+        let r = c.get_renewal().unwrap();
+        assert_eq!(r.report_text, "hello");
+        assert_eq!(
+            r.report_hash,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+        );
+        assert_eq!(r.requested_term_secs, 600);
+        assert_eq!(r.requested_topup, near_amt(500));
+        assert_eq!(
+            c.get_work_log(0, 10).last().unwrap().kind,
+            EntryKind::RenewalProposed
+        );
+        let receipts = get_created_receipts();
+        let rc = receipts
+            .iter()
+            .find(|r| r.receiver_id.as_str() == "dao.testnet")
+            .expect("receipt to dao");
+        assert!(rc.actions.iter().any(|a| matches!(
+            a,
+            MockAction::FunctionCallWeight { args, .. }
+                if {
+                    let v: near_sdk::serde_json::Value = near_sdk::serde_json::from_slice(args).unwrap();
+                    let d = v["proposal"]["description"].as_str().unwrap();
+                    d.starts_with("Termwork: renewal for term #1")
+                        && d.contains("report hash 2cf24dba")
+                        && v["proposal"]["kind"]["FunctionCall"]["actions"][0]["method_name"] == "renew"
+                }
+        )));
+        ctx("agent.testnet", NearToken::from_near(0));
+        c.on_renewal_proposal_added(Ok(9));
+        assert_eq!(c.get_renewal().unwrap().proposal_id, Some(9));
+    }
+
+    #[test]
+    fn renew_extends_term_and_rekeys() {
+        let mut c = hired();
+        dao_at(T_NS + secs(250), NearToken::from_near(1));
+        c.renew(600, Some(other_key()));
+        let v = c.get_mandate();
+        assert_eq!(v.term_number, 2);
+        assert_eq!(v.term_end_ms, (T_NS + secs(250)) / 1_000_000 + 600_000);
+        assert_eq!(v.agent_key, Some(other_key()));
+        assert_eq!(c.get_work_log(0, 10).last().unwrap().kind, EntryKind::Renewed);
+        let receipts = get_created_receipts();
+        let acts: Vec<_> = receipts
+            .iter()
+            .filter(|r| r.receiver_id.as_str() == "agent.testnet")
+            .flat_map(|r| r.actions.iter())
+            .collect();
+        assert!(matches!(acts[0], MockAction::DeleteKey { .. }));
+        assert!(matches!(acts[1], MockAction::AddKeyWithFunctionCall { .. }));
+    }
+
+    #[test]
+    fn fire_deletes_key_cancels_requests_and_returns_budget() {
+        let mut c = hired_big(500);
+        request(&mut c, 400, "https://e/big");
+        dao_ctx(NearToken::from_near(5));
+        c.fire("not delivering".into());
+        assert_eq!(c.get_status(), Status::Fired);
+        assert_eq!(c.get_mandate().agent_key, None);
+        assert_eq!(c.get_requests()[0].state, RequestState::Cancelled);
+        assert_eq!(c.get_work_log(0, 10).last().unwrap().kind, EntryKind::Fired);
+        let receipts = get_created_receipts();
+        assert!(receipts
+            .iter()
+            .any(|r| r.actions.iter().any(|a| matches!(a, MockAction::DeleteKey { .. }))));
+        assert!(receipts.iter().any(|r| r.receiver_id.as_str() == "dao.testnet"
+            && r.actions
+                .iter()
+                .any(|a| matches!(a, MockAction::Transfer { .. }))));
+    }
+
+    #[test]
+    #[should_panic(expected = "agent only")]
+    fn fire_then_agent_spend_panics() {
+        let mut c = hired();
+        dao_ctx(NearToken::from_near(5));
+        c.fire("bye".into());
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(10), 0, "u".into(), "h".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "agent was fired")]
+    fn fire_then_execute_approved_spend_panics() {
+        let mut c = hired_big(500);
+        dao_ctx(NearToken::from_near(5));
+        c.fire("bye".into());
+        c.execute_approved_spend(0);
+    }
+
+    #[test]
+    #[should_panic(expected = "term not ended")]
+    fn expire_requires_term_end() {
+        let mut c = hired();
+        ctx("anyone.testnet", NearToken::from_near(0));
+        c.expire();
+    }
+
+    #[test]
+    fn expire_deletes_key_and_sets_expired() {
+        let mut c = hired();
+        agent_ctx("bob.testnet", other_key(), T_NS + secs(301));
+        c.expire();
+        assert_eq!(c.get_status(), Status::Expired);
+        assert_eq!(c.get_mandate().agent_key, None);
+        assert_eq!(c.get_work_log(0, 10).last().unwrap().kind, EntryKind::Expired);
+        assert!(get_created_receipts()
+            .iter()
+            .any(|r| r.actions.iter().any(|a| matches!(a, MockAction::DeleteKey { .. }))));
+    }
+
+    #[test]
+    fn renew_after_expire_only_adds_key() {
+        let mut c = hired();
+        agent_ctx("bob.testnet", other_key(), T_NS + secs(301));
+        c.expire();
+        dao_at(T_NS + secs(400), NearToken::from_near(0));
+        c.renew(600, None);
+        assert_eq!(c.get_status(), Status::Active);
+        assert_eq!(c.get_mandate().agent_key, Some(key()));
+        let receipts = get_created_receipts();
+        let acts: Vec<_> = receipts.iter().flat_map(|r| r.actions.iter()).collect();
+        assert_eq!(acts.len(), 1);
+        assert!(matches!(acts[0], MockAction::AddKeyWithFunctionCall { .. }));
+    }
+
+    #[test]
+    #[should_panic(expected = "not fired")]
+    fn sweep_only_when_fired() {
+        let mut c = hired();
+        ctx("anyone.testnet", NearToken::from_near(0));
+        c.sweep();
+    }
+
+    #[test]
+    fn sweep_after_fire_transfers_to_dao() {
+        let mut c = hired();
+        dao_ctx(NearToken::from_near(5));
+        c.fire("bye".into());
+        ctx("anyone.testnet", NearToken::from_near(0));
+        c.sweep();
+        assert_eq!(c.get_work_log(0, 10).last().unwrap().kind, EntryKind::Swept);
+        assert!(get_created_receipts()
+            .iter()
+            .any(|r| r.receiver_id.as_str() == "dao.testnet"
+                && r.actions
+                    .iter()
+                    .any(|a| matches!(a, MockAction::Transfer { .. }))));
+    }
+
+    #[test]
+    #[should_panic(expected = "not expired")]
+    fn release_only_when_expired() {
+        let mut c = hired();
+        dao_ctx(NearToken::from_near(5));
+        c.release();
+    }
+
+    #[test]
+    fn release_after_expire_transfers_to_dao() {
+        let mut c = hired();
+        agent_ctx("bob.testnet", other_key(), T_NS + secs(301));
+        c.expire();
+        dao_at(T_NS + secs(310), NearToken::from_near(0));
+        c.release();
+        assert_eq!(c.get_work_log(0, 10).last().unwrap().kind, EntryKind::Released);
+        assert!(get_created_receipts()
+            .iter()
+            .any(|r| r.receiver_id.as_str() == "dao.testnet"
+                && r.actions
+                    .iter()
+                    .any(|a| matches!(a, MockAction::Transfer { .. }))));
     }
 }

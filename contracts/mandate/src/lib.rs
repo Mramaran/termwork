@@ -41,6 +41,8 @@ pub struct Mandate {
     pub agent_key: Option<PublicKey>,
     /// Key removed by expire/fire; lets a later `renew` re-add it when none is passed.
     pub retired_key: Option<PublicKey>,
+    /// Total the DAO has put up for the agent: hire deposit plus renew top-ups.
+    pub budget_total: u128,
     pub budget_spent: u128,
     pub work_log: Vector<LogEntry>,
     pub paid_refs: LookupSet<String>,
@@ -69,6 +71,7 @@ impl Mandate {
             term_number: 0,
             agent_key: None,
             retired_key: None,
+            budget_total: 0,
             budget_spent: 0,
             work_log: Vector::new(StorageKey::WorkLog),
             paid_refs: LookupSet::new(StorageKey::PaidRefs),
@@ -89,6 +92,7 @@ impl Mandate {
             term_end_ms: self.term_end_ms,
             term_number: self.term_number,
             agent_key: self.agent_key.clone(),
+            budget_total: U128(self.budget_total),
             budget_spent: U128(self.budget_spent),
             budget_available: self.get_budget(),
         }
@@ -124,13 +128,22 @@ impl Mandate {
         require!(env::predecessor_account_id() == self.dao_id, "only the DAO");
     }
 
-    pub(crate) fn budget_available(&self) -> u128 {
+    /// Everything above the storage reserve and the gas buffer. Fire, release
+    /// and sweep return all of it to the DAO.
+    pub(crate) fn withdrawable(&self) -> u128 {
         let reserved = env::storage_byte_cost()
             .saturating_mul(env::storage_usage() as u128)
             .saturating_add(GAS_BUFFER);
         env::account_balance()
             .saturating_sub(reserved)
             .as_yoctonear()
+    }
+
+    /// What the agent may still spend: the lower of the funds actually held
+    /// and what the DAO voted (`budget_total - budget_spent`).
+    pub(crate) fn budget_available(&self) -> u128 {
+        self.withdrawable()
+            .min(self.budget_total.saturating_sub(self.budget_spent))
     }
 
     /// Appends a log entry, assigning its index.
@@ -663,7 +676,7 @@ mod tests {
                 }
         )));
         ctx("agent.testnet", NearToken::from_near(0));
-        c.on_renewal_proposal_added(Ok(9));
+        c.on_renewal_proposal_added(HELLO_HASH.into(), RENEWAL_TS_MS, Ok(9));
         assert_eq!(c.get_renewal().unwrap().proposal_id, Some(9));
     }
 
@@ -808,5 +821,160 @@ mod tests {
                 && r.actions
                     .iter()
                     .any(|a| matches!(a, MockAction::Transfer { .. }))));
+    }
+
+    // ---- Final review fixes: single renewal, stale callbacks, budget cap ----
+
+    const HELLO_HASH: &str = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
+    const RENEWAL_TS_MS: u64 = (T_NS + 250 * 1_000_000_000) / 1_000_000;
+
+    #[test]
+    #[should_panic(expected = "renewal already proposed")]
+    fn propose_renewal_rejects_second_call() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS + secs(250));
+        let _ = c.propose_renewal("hello".into(), 600, near_amt(500));
+        agent_ctx("agent.testnet", key(), T_NS + secs(260));
+        let _ = c.propose_renewal("other".into(), 600, near_amt(500));
+    }
+
+    #[test]
+    fn propose_renewal_allowed_again_after_failed_callback() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS + secs(250));
+        let _ = c.propose_renewal("hello".into(), 600, near_amt(500));
+        ctx("agent.testnet", NearToken::from_near(0));
+        c.on_renewal_proposal_added(
+            HELLO_HASH.into(),
+            RENEWAL_TS_MS,
+            Err(near_sdk::PromiseError::Failed),
+        );
+        assert!(c.get_renewal().is_none());
+        agent_ctx("agent.testnet", key(), T_NS + secs(260));
+        let _ = c.propose_renewal("again".into(), 600, near_amt(500));
+        assert_eq!(c.get_renewal().unwrap().report_text, "again");
+    }
+
+    #[test]
+    fn stale_renewal_callback_does_not_touch_newer_renewal() {
+        let mut c = hired();
+        agent_ctx("agent.testnet", key(), T_NS + secs(250));
+        let _ = c.propose_renewal("hello".into(), 600, near_amt(500));
+        // Newer renewal replaces it (the first one failed and was cleared).
+        c.renewal = None;
+        agent_ctx("agent.testnet", key(), T_NS + secs(260));
+        let _ = c.propose_renewal("newer".into(), 600, near_amt(500));
+        ctx("agent.testnet", NearToken::from_near(0));
+        // Late callbacks for the first call: neither id nor error may land on the newer one.
+        c.on_renewal_proposal_added(HELLO_HASH.into(), RENEWAL_TS_MS, Ok(3));
+        assert_eq!(c.get_renewal().unwrap().proposal_id, None);
+        c.on_renewal_proposal_added(
+            HELLO_HASH.into(),
+            RENEWAL_TS_MS,
+            Err(near_sdk::PromiseError::Failed),
+        );
+        assert_eq!(c.get_renewal().unwrap().report_text, "newer");
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot renew")]
+    fn renew_after_fire_panics() {
+        let mut c = hired();
+        dao_ctx(NearToken::from_near(5));
+        c.fire("bye".into());
+        dao_at(T_NS + secs(10), NearToken::from_near(1));
+        c.renew(600, None);
+    }
+
+    #[test]
+    fn hire_sets_budget_total_to_deposit() {
+        let c = hired();
+        let v = c.get_mandate();
+        assert_eq!(v.budget_total.0, NearToken::from_near(2).as_yoctonear());
+        assert_eq!(v.budget_spent.0, 0);
+        // Balance (5 NEAR) is higher than the voted 2 NEAR; the cap wins.
+        assert_eq!(v.budget_available.0, NearToken::from_near(2).as_yoctonear());
+    }
+
+    #[test]
+    fn renew_adds_topup_to_budget_total() {
+        let mut c = hired();
+        dao_at(T_NS + secs(250), NearToken::from_near(1));
+        c.renew(600, Some(other_key()));
+        assert_eq!(
+            c.get_mandate().budget_total.0,
+            NearToken::from_near(3).as_yoctonear()
+        );
+    }
+
+    fn hired_small(deposit_milli: u128) -> Mandate {
+        let mut c = fresh();
+        let mut b = VMContextBuilder::new();
+        b.current_account_id("agent.testnet".parse().unwrap())
+            .predecessor_account_id(dao())
+            .attached_deposit(NearToken::from_millinear(deposit_milli))
+            .account_balance(NearToken::from_near(5))
+            .block_timestamp(T_NS);
+        testing_env!(b.build());
+        c.hire(mission(1), near_amt(200), near_amt(500), 300, key());
+        c
+    }
+
+    #[test]
+    #[should_panic(expected = "insufficient budget")]
+    fn spend_beyond_budget_total_rejected_even_with_higher_balance() {
+        let mut c = hired_small(100);
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(150), 0, "u".into(), "h".into());
+    }
+
+    #[test]
+    fn spend_up_to_budget_total_then_rejected() {
+        let mut c = hired_small(300);
+        agent_ctx("agent.testnet", key(), T_NS);
+        c.spend(bob(), near_amt(200), 0, "a".into(), "h".into());
+        assert_eq!(c.get_mandate().budget_available.0, near_amt(100).0);
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.spend(bob(), near_amt(150), 0, "b".into(), "h".into());
+        }));
+        assert!(r.is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "insufficient budget")]
+    fn request_spend_counts_bond_against_budget_total() {
+        // Budget 0.45 NEAR: a 0.4 NEAR request plus the 0.1 NEAR bond does not fit.
+        ctx("dao.testnet", NearToken::from_near(0));
+        let mut c = Mandate::new(dao(), U128(BOND));
+        let mut b = VMContextBuilder::new();
+        b.current_account_id("agent.testnet".parse().unwrap())
+            .predecessor_account_id(dao())
+            .attached_deposit(NearToken::from_millinear(450))
+            .account_balance(NearToken::from_near(5))
+            .block_timestamp(T_NS);
+        testing_env!(b.build());
+        c.hire(mission(1), near_amt(200), near_amt(500), 300, key());
+        request(&mut c, 400, "u");
+    }
+
+    #[test]
+    #[should_panic(expected = "insufficient budget")]
+    fn execute_approved_spend_respects_budget_total() {
+        let mut c = hired_big(500);
+        request(&mut c, 400, "u");
+        c.budget_spent = NearToken::from_millinear(1800).as_yoctonear();
+        dao_ctx(NearToken::from_near(5));
+        c.execute_approved_spend(0);
+    }
+
+    #[test]
+    fn fire_returns_everything_above_reserve_not_only_budget() {
+        let mut c = hired_small(300);
+        dao_ctx(NearToken::from_near(5));
+        let expected = c.withdrawable();
+        assert!(expected > c.get_mandate().budget_total.0);
+        c.fire("done".into());
+        let log = c.get_work_log(0, 10);
+        assert_eq!(log.last().unwrap().amount.unwrap().0, expected);
     }
 }

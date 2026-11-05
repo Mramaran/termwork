@@ -101,6 +101,7 @@ impl Mandate {
         let term_ms = self.term_end_ms - self.term_start_ms;
         let window_start = self.term_end_ms - term_ms * RENEWAL_WINDOW_PCT / 100;
         require!(now >= window_start, "renewal window not open");
+        require!(self.renewal.is_none(), "renewal already proposed");
         require!(
             self.proposal_bond <= self.budget_available(),
             "insufficient budget"
@@ -147,7 +148,9 @@ impl Mandate {
         )
         .then(Promise::new(env::current_account_id()).function_call(
             "on_renewal_proposal_added".to_string(),
-            b"{}".to_vec(),
+            json!({ "report_hash": report_hash, "proposed_at_ms": now })
+                .to_string()
+                .into_bytes(),
             NearToken::from_yoctonear(0),
             crate::dao::GAS_CALLBACK,
         ))
@@ -156,13 +159,25 @@ impl Mandate {
     #[private]
     pub fn on_renewal_proposal_added(
         &mut self,
+        report_hash: String,
+        proposed_at_ms: u64,
         #[callback_result] r: Result<u64, PromiseError>,
     ) {
-        if let Some(rn) = self.renewal.as_mut() {
-            match r {
-                Ok(id) => rn.proposal_id = Some(id),
-                Err(_) => self.renewal = None,
+        // Ignore a late callback that belongs to an older renewal.
+        let is_current = self
+            .renewal
+            .as_ref()
+            .map_or(false, |rn| rn.report_hash == report_hash && rn.timestamp_ms == proposed_at_ms);
+        if !is_current {
+            return;
+        }
+        match r {
+            Ok(id) => {
+                if let Some(rn) = self.renewal.as_mut() {
+                    rn.proposal_id = Some(id);
+                }
             }
+            Err(_) => self.renewal = None,
         }
     }
 }

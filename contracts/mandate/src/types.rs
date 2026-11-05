@@ -101,6 +101,7 @@ pub struct MandateView {
     pub term_end_ms: u64,
     pub term_number: u32,
     pub agent_key: Option<PublicKey>,
+    pub budget_total: U128,
     pub budget_spent: U128,
     pub budget_available: U128,
 }

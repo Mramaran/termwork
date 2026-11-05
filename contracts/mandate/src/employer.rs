@@ -35,6 +35,7 @@ impl Mandate {
         self.term_number += 1;
         self.status = Status::Active;
         self.budget_spent = 0;
+        self.budget_total = env::attached_deposit().as_yoctonear();
         let stale_key = self.agent_key.replace(agent_public_key.clone());
         self.retired_key = None;
         self.renewal = None;
@@ -83,6 +84,9 @@ impl Mandate {
         self.term_end_ms = now + term_secs * 1_000;
         self.term_number += 1;
         self.status = Status::Active;
+        self.budget_total = self
+            .budget_total
+            .saturating_add(env::attached_deposit().as_yoctonear());
         let old_key = self.agent_key.replace(new_key.clone());
         self.retired_key = None;
         self.renewal = None;
@@ -133,7 +137,7 @@ impl Mandate {
         }
         self.status = Status::Fired;
         self.renewal = None;
-        let amount = self.budget_available();
+        let amount = self.withdrawable();
         self.push_log(LogEntry {
             index: 0,
             kind: EntryKind::Fired,
@@ -155,7 +159,7 @@ impl Mandate {
     pub fn release(&mut self) {
         self.assert_dao();
         require!(self.status == Status::Expired, "not expired");
-        let amount = self.budget_available();
+        let amount = self.withdrawable();
         self.push_log(LogEntry {
             index: 0,
             kind: EntryKind::Released,

@@ -32,7 +32,7 @@ impl Mandate {
     /// Anyone can forward leftover funds (e.g. a returned proposal bond) to the DAO after a fire.
     pub fn sweep(&mut self) {
         require!(self.status == Status::Fired, "not fired");
-        let amount = self.budget_available();
+        let amount = self.withdrawable();
         if amount > 0 {
             self.push_log(LogEntry {
                 index: 0,

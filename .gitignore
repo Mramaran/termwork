@@ -1,0 +1,34 @@
+# ── Planning and research notes (local only, never published) ──
+NEAR_HACKATHON.md
+MISSION_DAO.md
+ideation/
+docs/
+.claude/
+
+# ── Secrets ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.near-credentials/
+
+# ── Build output and dependencies ──
+target/
+node_modules/
+dist/
+build/
+*.wasm
+!contracts/mandate/tests/res/*.wasm
+web/public/receipts/
+
+# ── Runtime output ──
+demo-output.json
+*.log
+
+# ── Editor and OS files ──
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

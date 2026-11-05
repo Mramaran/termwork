@@ -57,4 +57,37 @@ impl Mandate {
             AGENT_METHODS.to_string(),
         );
     }
+
+    /// Called by the DAO once members approve a big-spend proposal.
+    pub fn execute_approved_spend(&mut self, request_id: u32) {
+        self.assert_dao();
+        let mut req = self
+            .requests
+            .get(&request_id)
+            .cloned()
+            .unwrap_or_else(|| env::panic_str("unknown request"));
+        require!(req.state == RequestState::Pending, "not pending");
+        require!(
+            req.amount.0 <= self.budget_available(),
+            "insufficient budget"
+        );
+
+        req.state = RequestState::Executed;
+        self.requests.insert(request_id, req.clone());
+        self.paid_refs.insert(req.evidence_url.clone());
+        self.budget_spent += req.amount.0;
+        self.push_log(LogEntry {
+            index: 0,
+            kind: EntryKind::PaidApproved,
+            clause_id: Some(req.clause_id),
+            amount: Some(req.amount),
+            recipient: Some(req.recipient.clone()),
+            evidence_url: Some(req.evidence_url),
+            receipt_hash: Some(req.receipt_hash),
+            note: Some(req.rationale),
+            timestamp_ms: now_ms(),
+        });
+        let _ = Promise::new(req.recipient)
+            .transfer(near_sdk::NearToken::from_yoctonear(req.amount.0));
+    }
 }

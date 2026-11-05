@@ -18,7 +18,7 @@ impl Mandate {
         require!(now_ms() < self.term_end_ms, "term ended");
     }
 
-    fn find_clause(&self, clause_id: u8) -> &Clause {
+    pub(crate) fn find_clause(&self, clause_id: u8) -> &Clause {
         self.mission
             .as_ref()
             .and_then(|m| m.clauses.iter().find(|c| c.id == clause_id))

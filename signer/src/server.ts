@@ -117,7 +117,7 @@ export function listenLocal(server: http.Server, port: number): Promise<void> {
 
 async function main(): Promise<void> {
   try {
-    process.loadEnvFile?.();
+    process.loadEnvFile?.(fileURLToPath(new URL("../../.env", import.meta.url)));
   } catch {
     // no .env file; environment only
   }

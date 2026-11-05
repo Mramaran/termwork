@@ -1,0 +1,49 @@
+name: Deploy web to GitHub Pages
+
+# Settings > Pages > Source must be "GitHub Actions".
+# Settings > Secrets and variables > Actions > Variables: set VITE_MANDATE_ID and VITE_DAO_ID
+# to the mandate and DAO accounts the site should show (they are public account ids, not secrets).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      VITE_MANDATE_ID: ${{ vars.VITE_MANDATE_ID }}
+      VITE_DAO_ID: ${{ vars.VITE_DAO_ID }}
+      VITE_NETWORK: testnet
+      # Project pages live at https://<owner>.github.io/<repo>/, so Vite's base is the repo name.
+      BASE_PATH: /${{ github.event.repository.name }}/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run -w web build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -2,7 +2,6 @@
 name = "termwork_mandate"
 version = "0.1.0"
 edition = "2021"
-repository = "https://github.com/termwork/termwork"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

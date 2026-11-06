@@ -142,7 +142,7 @@ nav.tabs a[aria-current] { background: var(--ok); border-color: var(--ok); color
 .revoked.flip { animation: flip-in 0.5s ease-out; transform-origin: top; }
 .revoked.pending { opacity: 0; }
 .replay-bar { margin: 12px 0 0; }
-.replay-btn { font: inherit; font-weight: 700; padding: 8px 16px; border: 1px solid var(--text); border-radius: var(--r-small); background: transparent; color: var(--text); cursor: pointer; }
+.replay-btn { font: inherit; font-weight: 700; padding: 8px 16px; min-height: 44px; border: 1px solid var(--text); border-radius: var(--r-small); background: transparent; color: var(--text); cursor: pointer; }
 .replay-btn:hover { background: var(--text); color: var(--bg); }
 
 ol.steps { list-style: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 18px 0; padding: 0; counter-reset: s; }
@@ -167,6 +167,7 @@ ol.steps button {
 ol.steps button::before { content: counter(s); display: block; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
 ol.steps li.fired button::before { color: inherit; opacity: 0.75; }
 ol.steps button:focus-visible { outline-offset: -5px; }
+ol.steps li.fired button:focus-visible { outline-color: var(--invert-fg); }
 
 .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; align-items: start; }
 h2 { font-size: 1rem; font-weight: 700; margin: 0 0 10px; }
@@ -205,6 +206,7 @@ h2 { font-size: 1rem; font-weight: 700; margin: 0 0 10px; }
 .checks { list-style: none; padding: 0; margin: 0; }
 .checks li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); min-height: 44px; align-items: center; }
 .checks li:last-child { border-bottom: 0; }
+.checks a { display: flex; align-items: center; min-height: 44px; }
 .ok-chip { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--ok); color: var(--on-ok); }
 .rec { color: var(--muted); text-align: center; }
 

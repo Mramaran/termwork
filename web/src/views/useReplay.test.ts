@@ -84,4 +84,15 @@ describe("useReplay", () => {
     expect(result.current.playing).toBe(true);
     expect(result.current.step).toBe("hire");
   });
+
+  it("replay=1 paints step 1 on the very first render", () => {
+    window.history.replaceState(null, "", "/?replay=1");
+    let first: { step: string; linesShown: number } | null = null;
+    renderHook(() => {
+      const r = useReplay(IDS, { msPerStep: 4000 });
+      first ??= { step: r.step, linesShown: r.linesShown };
+      return r;
+    });
+    expect(first).toEqual({ step: "hire", linesShown: 1 });
+  });
 });

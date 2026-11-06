@@ -138,7 +138,7 @@ export function WatchRun({ run }: { run: RunData }) {
           <dt>Recorded</dt>
           <dd>{fmtDate(run.recordedAt)}</dd>
         </dl>
-        <div className={`revoked${status === "Active" ? " active" : ""}${replay.replayed ? (selected === "fired" ? " flip" : " pending") : ""}`} role="status">
+        <div className={`revoked${status === "Active" ? " active" : ""}${replay.replayed && (replay.playing || selected === "fired") ? (selected === "fired" ? " flip" : " pending") : ""}`} role="status">
           <strong>{status}</strong>
           <span className="now">{note}</span>
         </div>

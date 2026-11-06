@@ -28,7 +28,9 @@ const wantsReplay = (): boolean => {
 export function useReplay(stepIds: StepId[], opts: Options) {
   const last = stepIds.length - 1;
   const count = (id: StepId | undefined) => Math.max(1, (id && opts.lineCounts?.[id]) || 1);
-  const [pos, setPos] = useState<Pos>({ idx: last, shown: Infinity, playing: false, replayed: false });
+  const [pos, setPos] = useState<Pos>(() =>
+    wantsReplay() ? { idx: 0, shown: 1, playing: true, replayed: true } : { idx: last, shown: Infinity, playing: false, replayed: false },
+  );
 
   const play = useCallback(() => setPos({ idx: 0, shown: 1, playing: true, replayed: true }), []);
   const pause = useCallback(() => setPos((p) => ({ ...p, playing: false, shown: Infinity })), []);
@@ -36,10 +38,6 @@ export function useReplay(stepIds: StepId[], opts: Options) {
     (id: StepId) => setPos({ idx: Math.max(0, stepIds.indexOf(id)), shown: Infinity, playing: false, replayed: false }),
     [stepIds],
   );
-
-  useEffect(() => {
-    if (wantsReplay()) play();
-  }, [play]);
 
   const { idx, shown, playing } = pos;
   const n = count(stepIds[idx]);

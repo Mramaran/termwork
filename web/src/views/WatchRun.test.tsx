@@ -52,6 +52,14 @@ describe("WatchRun", () => {
     expect(screen.getAllByText(/^PR #\d+ "/)).toHaveLength(5);
   });
 
+  it("pausing mid-replay leaves the Fired block visible", () => {
+    const { container } = render(<WatchRun run={FIXTURE} />);
+    fireEvent.click(screen.getByRole("button", { name: "Replay the run" }));
+    expect(container.querySelector(".revoked")!.classList.contains("pending")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(container.querySelector(".revoked")!.classList.contains("pending")).toBe(false);
+  });
+
   it("clicking Work shows five PR lines with AI reasons", () => {
     render(<WatchRun run={FIXTURE} />);
     fireEvent.click(stepBtn("Work"));

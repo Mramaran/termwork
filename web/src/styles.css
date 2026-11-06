@@ -162,7 +162,7 @@ ol.steps button {
 }
 ol.steps button::before { content: counter(s); display: block; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
 ol.steps li.fired button::before { color: inherit; opacity: 0.75; }
-ol.steps li.fired button:focus-visible { outline-offset: -5px; }
+ol.steps button:focus-visible { outline-offset: -5px; }
 
 .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; align-items: start; }
 h2 { font-size: 1rem; font-weight: 700; margin: 0 0 10px; }

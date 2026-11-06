@@ -104,7 +104,7 @@ export function WatchRun({ run }: { run: RunData }) {
   const note = failed
     ? "Couldn't check the chain right now. Showing the recorded outcome."
     : keys === null
-      ? "Reading the chain"
+      ? "Checking the chain"
       : keys.length === 0
         ? "Keys on this account right now: none"
         : `Keys on this account right now: ${keys.length}`;
@@ -156,7 +156,7 @@ export function WatchRun({ run }: { run: RunData }) {
         </div>
         <aside className="evidence" aria-label="Check it yourself">
           <h2>Check it yourself</h2>
-          {selected === "fired" && <KeyCard mandateId={run.mandate} keys={keys} status="Fired" demo={null} />}
+          {selected === "fired" && <KeyCard mandateId={run.mandate} keys={keys} failed={failed} status="Fired" demo={null} />}
           <Checklist items={step.checks} confirmed={confirmed} keysFailed={failed} keysCount={keysCount} idPrefix={selected} />
         </aside>
       </div>

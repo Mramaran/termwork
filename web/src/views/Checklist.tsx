@@ -11,6 +11,7 @@ interface Props {
 
 function label(item: CheckItem, keysFailed: boolean, keysCount: number | null): string {
   if (item.kind !== "live-keys") return item.label;
+  if (keysCount === null && !keysFailed) return "Agent keys on-chain: checking";
   if (keysFailed) return "Agent keys on-chain: couldn't check right now";
   if (keysCount !== null && keysCount > 0) return `Agent keys on-chain: ${keysCount} still present`;
   return item.label;

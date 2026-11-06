@@ -11,7 +11,7 @@ function markerFor(line: FeedLine): Marker {
   if (/^Rules: ✗|^Result: skipped/.test(line.text)) return "no";
   if (/vote|proposal|council|DAO/i.test(line.text) && line.tone !== "info") return "vote";
   if (line.tone === "bad") return "no";
-  if (line.tone === "ok" || line.tone === "warn") return "ok";
+  if (line.tone === "ok") return "ok";
   return "none";
 }
 

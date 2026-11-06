@@ -26,7 +26,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const stepBtn = (name: string) => screen.getByRole("button", { name: new RegExp(`^\d?\s*${name}$`) });
+const stepBtn = (name: string) => screen.getByRole("button", { name: new RegExp(String.raw`^\d?\s*${name}$`) });
 
 describe("WatchRun", () => {
   it("opens on fired step with all five steps shown", async () => {
@@ -54,11 +54,19 @@ describe("WatchRun", () => {
   it("steps render from run.json when live status fails", async () => {
     keysMock.mockRejectedValue(new Error("rpc down"));
     render(<WatchRun run={FIXTURE} />);
-    await waitFor(() => expect(screen.getByText(/couldn't check right now/i)).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText(/couldn't check right now/i).length).toBeGreaterThan(0));
     const item = screen.getByText(/Agent keys on-chain/).closest("li")!;
     expect(item.textContent).not.toContain("✓");
     expect(item.querySelector(".ok-chip")).toBeNull();
     expect(screen.getByText(/The agent's next attempt was rejected/)).toBeTruthy();
+  });
+
+  it("shows checking state before the first key fetch settles", async () => {
+    keysMock.mockReturnValue(new Promise(() => {}));
+    render(<WatchRun run={FIXTURE} />);
+    expect(screen.getAllByText(/Checking the chain/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/couldn't check/i)).toBeNull();
+    expect(screen.getByText(/Agent keys on-chain: checking/)).toBeTruthy();
   });
 
   it("ticks live-keys when the key list is empty", async () => {

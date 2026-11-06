@@ -23,7 +23,7 @@ Everything runs on NEAR **testnet**; the code refuses any other network. You nee
 7. **Start the signer** in one terminal: `npm run -w signer start` → `[signer] listening on http://127.0.0.1:8787 for steward.…`.
 8. **Start the agent** in a second terminal: `npm run -w agent start` → `agent started (mode=…, source=fixtures, interval=30000ms)`, then log lines for the pull requests it handles. The mode comes from `AGENT_MODE` in `.env`:
    - `AGENT_MODE=fixture`: no model, no key; deterministic rules decide. Receipts are labelled model `fixture-rules`, `verified: false`.
-   - `AGENT_MODE=replay`: no model call and no NEAR AI key; the agent reuses the receipts in `receipts/`, matched by pull request URL. The committed receipts are fixture receipts (see [Receipts](#receipts)), so replay shows rule-based decisions. A pull request with no stored receipt is logged as `no stored receipt for <url>`.
+   - `AGENT_MODE=replay`: no model call and no NEAR AI key; the agent reuses the receipts in `receipts/`, matched by pull request URL. The committed receipts come from a live run (see [Receipts](#receipts)), so replay shows the real model's decisions. A pull request with no stored receipt is logged as `no stored receipt for <url>`.
    - `AGENT_MODE=live`: NEAR AI Cloud decides. Needs `NEARAI_API_KEY` and `NEARAI_MODEL`.
 
    With `SOURCE=fixtures`, the contributor accounts in `fixtures/prs.json` are placeholders (`*.invalid`) that cannot exist on testnet, so outside the demo the agent logs `recipient account does not exist` and pays no one. Only `npm run -w scripts demo` creates real recipient accounts (sub-accounts of a council member) and maps the fixture names onto them.
@@ -49,8 +49,11 @@ You see a `PASS` line for each assertion, in this order:
 
 The run writes `demo-output.json` (git-ignored) with every transaction hash and account. Two transactions from a recorded run on testnet:
 
-- A payment after the term ended, failed on-chain: <https://testnet.nearblocks.io/txns/3rws8jkHauNr6if9thQ4AheXPs3fBw9rHEh9UUKWiqmT>
-- The DAO fires the agent: <https://testnet.nearblocks.io/txns/7Mr7ghBFYrEtp3wATP79em7aNxoPK4Gjo1crrycDbKaZ>
+- The DAO hires the agent: <https://testnet.nearblocks.io/txns/9YMqHeQZi395zDsKEhroY94PLR8JgkRwmptMUHUppVpG>
+- A payment after the term ended, failed on-chain: <https://testnet.nearblocks.io/txns/2aTV7tu1htab2R5PCULxYUEcikf95HiTQM3qe2fLcvaq>
+- The DAO fires the agent: <https://testnet.nearblocks.io/txns/F1eJbeP4wVu3W1JTj7gUYV4ZMQuSxHT6JXnNbXsnrDw5>
+
+That run (2026-11-06, `AGENT_MODE=live`) used the agent account `steward.termwork-m2-fba0b2.testnet` and the DAO `twfba0b2.sputnikv2.testnet`. The model paid pull requests #1–#3 (0.2 NEAR each), sent #4 to a DAO vote that rejected it, and skipped #5; all 6 receipts are `verified: true`.
 
 ### The web page
 
@@ -123,7 +126,7 @@ A full demo run makes 5 decisions and one renewal report, about **$0.001**. The 
 
 ### Receipts
 
-The `receipts/` folder in this repository currently holds **fixture receipts**. They were produced in `AGENT_MODE=fixture` (model `fixture-rules`, `verified: false`) because no NEAR AI key had been used yet. To record live ones, set `AGENT_MODE=live`, `NEARAI_API_KEY` and `NEARAI_MODEL` in `.env`, run the agent or the demo, and commit the new files in `receipts/`; `index.json` then points each pull request at its live receipt. `NEARAI_ALLOW_UNVERIFIED=1` allows a model that NEAR AI does not own; its receipts are marked unverified.
+The `receipts/` folder holds the **6 live receipts** from the recorded run above (model `Qwen/Qwen3.8-27B`, all `verified: true`): one per pull request decision plus the renewal report. `index.json` maps each pull request URL, and `renewal:1`, to its receipt. Each receipt keeps the full request, response, signature and attestation report, so the checks above can be repeated offline. To record your own, set `AGENT_MODE=live`, `NEARAI_API_KEY` and `NEARAI_MODEL` in `.env` and run the agent or the demo. `NEARAI_ALLOW_UNVERIFIED=1` allows a model that NEAR AI does not own; its receipts are marked unverified.
 
 ## Where the key lives and why the model never sees it
 

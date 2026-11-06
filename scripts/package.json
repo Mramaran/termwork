@@ -9,6 +9,8 @@
     "vote": "tsx src/vote.ts",
     "fire": "tsx src/fire.ts",
     "demo": "tsx src/demo.ts",
+    "export-run": "tsx src/export-run.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {

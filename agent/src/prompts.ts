@@ -22,6 +22,7 @@ export function decisionMessages(m: MandateView, pr: PullRequestFact): ChatMessa
     changed_lines: pr.changedLines,
     labels: pr.labels,
     merged_at: pr.mergedAt,
+    near_account: pr.nearAccount,
   });
   return [
     { role: "system", content: system },

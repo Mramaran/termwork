@@ -200,3 +200,11 @@ describe("complete", () => {
     expect((await complete(msgs, "k", opts)).receipt.verified).toBe(false);
   });
 });
+
+describe("complete request body", () => {
+  it("asks the model not to reason at length, so decisions return in seconds", async () => {
+    const { fn } = mockNet();
+    await complete(msgs, "k", opts);
+    expect(JSON.parse((fn as any).reqBody).reasoning_effort).toBe("none");
+  });
+});

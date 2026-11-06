@@ -104,6 +104,23 @@ A receipt is `verified: true` only if all of these hold:
 
 Termwork does **not** verify the Intel TDX quote or the NVIDIA NRAS GPU evidence, so it does not prove that the signing address belongs to genuine TEE hardware. The `verifiedScope` field of each receipt says what was checked: `response-signature+model+nonce` or `none`.
 
+### Model, speed and cost
+
+The agent uses `Qwen/Qwen3.8-27B` on NEAR AI Cloud, a model NEAR AI runs inside a TEE (`owned_by: nearai`). Set it with `NEARAI_MODEL`. NEAR AI prices it at **$0.04 per million input tokens** and **$1.35 per million output tokens**.
+
+Measured on 2026-11-06 with the real decision prompt (`agent/src/prompts.ts`) for one pull request:
+
+| | Value |
+|---|---|
+| Time, end to end (completion, attestation report, signature) | 8.4 s |
+| Tokens | 491 input, 84 output |
+| Cost | $0.00013 |
+| Receipt | `verified: true` |
+
+A full demo run makes 5 decisions and one renewal report, about **$0.001**. The $10 of NEAR AI credit that NEAR Builders offers covers thousands of runs.
+
+**Why reasoning is off.** Every chat request sends `reasoning_effort: "none"` (`agent/src/nearai.ts`). The model is a reasoning model; left on, it spent about 1,750 thinking tokens and 45 seconds on a decision that needs 84 tokens of output, and slower decisions ran past the demo's 5-minute term. Turning reasoning off does not weaken the receipts: the answer is still signed by the model's TEE key (`signature_kind: provider_tee`). The decision itself is only advice; the fixed rules in `agent/src/validate.ts` and the contract's own checks decide what is paid.
+
 ### Receipts
 
 The `receipts/` folder in this repository currently holds **fixture receipts**. They were produced in `AGENT_MODE=fixture` (model `fixture-rules`, `verified: false`) because no NEAR AI key had been used yet. To record live ones, set `AGENT_MODE=live`, `NEARAI_API_KEY` and `NEARAI_MODEL` in `.env`, run the agent or the demo, and commit the new files in `receipts/`; `index.json` then points each pull request at its live receipt. `NEARAI_ALLOW_UNVERIFIED=1` allows a model that NEAR AI does not own; its receipts are marked unverified.

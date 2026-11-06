@@ -125,7 +125,9 @@ export async function complete(
     );
   }
 
-  const requestBody = JSON.stringify({ model, messages, stream: false });
+  // Reasoning models otherwise "think" for ~1-2k tokens (45 s+) on these short,
+  // rule-bound decisions; the answer is still signed by the model's TEE key.
+  const requestBody = JSON.stringify({ model, messages, stream: false, reasoning_effort: "none" });
   const cres = await fetch(`${base}/v1/chat/completions`, {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },

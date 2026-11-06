@@ -26,9 +26,14 @@ describe("steps", () => {
 
   it("fired step lists Fired 2.433 NEAR and Swept 0.115 NEAR separately", () => {
     const t = texts(S.fired.feed);
-    expect(t.filter((x) => x.includes("Fired 2.433 NEAR"))).toHaveLength(1);
+    expect(t.filter((x) => x.includes("Fired: 2.433 NEAR returned to the DAO"))).toHaveLength(1);
     expect(t.filter((x) => x.includes("Swept 0.115 NEAR"))).toHaveLength(1);
-    expect(t.some((x) => x.includes("Fired 2.433 NEAR") && x.includes("Swept"))).toBe(false);
+    expect(t.some((x) => x.includes("Fired: 2.433 NEAR") && x.includes("Swept"))).toBe(false);
+    expect(t.some((x) => x.includes("including the 1.4 NEAR of unspent budget"))).toBe(true);
+  });
+
+  it("fired attempt line is labelled recorded output", () => {
+    expect(texts(S.fired.feed).some((x) => x.startsWith("The agent's next attempt was rejected") && x.endsWith("(recorded output)"))).toBe(true);
   });
 
   it("renew step shows the report verbatim plus an On-chain figures line and the note", () => {
@@ -79,6 +84,19 @@ describe("confirmCheck", () => {
     expect(await confirmCheck(item, { ...ctxBase, receipt: async () => ({ verified: false }) })).toBe(false);
     expect(await confirmCheck(item, { ...ctxBase, receipt: async () => null })).toBe(false);
     expect(await confirmCheck(item, { ...ctxBase, receipt: async () => ({ verified: true }) })).toBe(true);
+  });
+
+  it("renewal receipt ticks only when verified and its message equals the report", async () => {
+    const item = S.renew.checks.find((c) => c.kind === "receipt")!;
+    const body = (content: string) => JSON.stringify({ choices: [{ message: { content } }] });
+    const text = FIXTURE.renewal.reportText;
+    expect(item.expectText).toBe(text);
+    const ctx = (r: object) => ({ ...ctxBase, receipt: async () => r });
+    expect(await confirmCheck(item, ctx({ verified: true, responseText: body(text) }))).toBe(true);
+    expect(await confirmCheck(item, ctx({ verified: true, responseText: body(text + "!") }))).toBe(false);
+    expect(await confirmCheck(item, ctx({ verified: true, responseText: "not json" }))).toBe(false);
+    expect(await confirmCheck(item, ctx({ verified: true }))).toBe(false);
+    expect(await confirmCheck(item, ctx({ verified: false, responseText: body(text) }))).toBe(false);
   });
 
   it("receipt item is not ticked when the fetch rejects", async () => {

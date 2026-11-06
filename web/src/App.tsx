@@ -113,7 +113,7 @@ export function App() {
         {tab === "watch" && strip && (
           <p className="strip">
             <span>
-              <strong>Verify in 60 seconds.</strong> Click each step. Every claim has a tick and a link you can open on the NEAR explorer or as a signed AI receipt.
+              <strong>Verify in 60 seconds.</strong> Click each step. Every claim links to its proof on the NEAR explorer or to a signed AI receipt; a tick means the page has confirmed it.
             </span>
             <button type="button" className="btn" aria-label="Dismiss this tip" onClick={() => setStrip(false)}>
               Dismiss

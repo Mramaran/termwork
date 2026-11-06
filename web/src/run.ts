@@ -70,6 +70,8 @@ export interface CheckItem {
   kind: "tx" | "receipt" | "live-keys" | "report-hash" | "recorded";
   receiptHash?: string;
   tx?: string;
+  /** Receipt items only: the response text must equal this for the tick. */
+  expectText?: string;
 }
 
 export interface Step {
@@ -176,7 +178,7 @@ function renewStep(run: RunData): Step {
   const checks: CheckItem[] = [
     txCheck("Renewal proposal", run.renewal.proposalTx, run),
     { label: "Report hash matches on-chain", href: explorerAccount(run.mandate), kind: "report-hash" },
-    { label: "Renewal AI receipt", href: publicUrl(`receipts/${run.renewal.receiptHash}.json`), kind: "receipt", receiptHash: run.renewal.receiptHash },
+    { label: "Renewal AI receipt", href: publicUrl(`receipts/${run.renewal.receiptHash}.json`), kind: "receipt", receiptHash: run.renewal.receiptHash, expectText: run.renewal.reportText },
   ];
   return { title: "Renew", feed, checks };
 }
@@ -189,9 +191,12 @@ function firedStep(run: RunData): Step {
     { text: `A late payment failed on-chain: "${run.end.termEndedError}"`, tone: "bad" },
     { text: "The DAO voted to fire the agent", tone: "ok" },
     { text: "The agent's key was deleted", tone: "ok" },
-    { text: `Fired ${near(fired)} NEAR`, tone: "ok" },
+    {
+      text: `Fired: ${near(fired)} NEAR returned to the DAO (all funds above the storage reserve, including the ${near(String(BigInt(run.budget.total) - BigInt(run.budget.spent)))} NEAR of unspent budget)`,
+      tone: "ok",
+    },
     { text: `Swept ${near(swept)} NEAR`, tone: "ok" },
-    { text: `The agent's next attempt was rejected: ${run.end.agentAttempt}`, tone: "bad" },
+    { text: `The agent's next attempt was rejected: ${run.end.agentAttempt} (recorded output)`, tone: "bad" },
   ];
   const checks: CheckItem[] = [
     txCheck("Late payment failed (term ended)", run.end.termEndedTx, run),
@@ -220,6 +225,17 @@ export async function reportHashMatches(text: string, expectedHex: string): Prom
   return hex === expectedHex.toLowerCase();
 }
 
+/** The assistant message text inside a stored chat completion body, or null when it can't be read. */
+export function messageContent(responseText: string | undefined): string | null {
+  if (!responseText) return null;
+  try {
+    const c = (JSON.parse(responseText) as { choices?: { message?: { content?: unknown } }[] }).choices?.[0]?.message?.content;
+    return typeof c === "string" ? c : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function confirmCheck(
   item: CheckItem,
   ctx: { keys: AccessKeyInfo[] | null; receipt: (h: string) => Promise<Receipt | null>; reportOk: boolean | null },
@@ -230,7 +246,9 @@ export async function confirmCheck(
     case "receipt":
       if (!item.receiptHash) return false;
       try {
-        return (await ctx.receipt(item.receiptHash))?.verified === true;
+        const r = await ctx.receipt(item.receiptHash);
+        if (r?.verified !== true) return false;
+        return item.expectText === undefined || messageContent(r.responseText) === item.expectText;
       } catch {
         return false;
       }

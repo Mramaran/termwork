@@ -70,6 +70,17 @@ describe("TryLive", () => {
     expect(screen.queryByText(/would pay/)).toBeNull();
   });
 
+  it("shows an unreadable answer as such, not as a refusal", async () => {
+    const body = { ...OK(true), answer: { error: "no JSON found" }, result: "would skip" };
+    vi.stubGlobal("fetch", respond(200, body));
+    render(<TryLive />);
+    fireEvent.click(screen.getByRole("button", { name: "Ask the agent" }));
+    expect(await screen.findByText(/couldn't be read as a decision/)).toBeTruthy();
+    expect(screen.queryByText(/does not qualify/)).toBeNull();
+    expect(screen.getByText(/would skip/)).toBeTruthy();
+    expect(screen.getByText(/Fail: first-time contributor/)).toBeTruthy();
+  });
+
   it("verified badge only when receipt.verified is true", async () => {
     vi.stubGlobal("fetch", respond(200, OK(false)));
     render(<TryLive />);

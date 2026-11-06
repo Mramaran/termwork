@@ -5,8 +5,14 @@ interface Rule {
   pass: boolean;
   note?: string;
 }
+interface Decision {
+  qualifies: boolean;
+  clause_id: number | null;
+  amount_near: string | null;
+  rationale: string;
+}
 interface DecideOk {
-  answer: { qualifies: boolean; clause_id: string | null; amount_near: string | null; rationale: string };
+  answer: Decision | { error: string };
   rules: Rule[];
   result: string;
   amountNear?: string;
@@ -142,12 +148,18 @@ export function TryLive() {
           <>
             <div className="rblock">
               <h3>AI said</h3>
-              <p>
-                {out.answer.qualifies ? "It qualifies" : "It does not qualify"}
-                {out.answer.clause_id ? ` (clause ${out.answer.clause_id})` : ""}
-                {out.answer.amount_near ? `, ${out.answer.amount_near} NEAR` : ""}.
-              </p>
-              <p className="quote">{out.answer.rationale}</p>
+              {"error" in out.answer ? (
+                <p>The model's answer couldn't be read as a decision.</p>
+              ) : (
+                <>
+                  <p>
+                    {out.answer.qualifies ? "It qualifies" : "It does not qualify"}
+                    {out.answer.clause_id ? ` (clause ${out.answer.clause_id})` : ""}
+                    {out.answer.amount_near ? `, ${out.answer.amount_near} NEAR` : ""}.
+                  </p>
+                  <p className="quote">{out.answer.rationale}</p>
+                </>
+              )}
             </div>
             <div className="rblock">
               <h3>Rules</h3>

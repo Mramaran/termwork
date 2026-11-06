@@ -31,6 +31,8 @@ const deps = (c: DecideDeps["complete"] = fakeComplete({ qualifies: true, clause
   complete: c,
   now: () => T0,
   secrets: [SENTINEL],
+  apiKey: SENTINEL,
+  model: "m",
 });
 
 beforeEach(() => {
@@ -98,7 +100,7 @@ describe("/api/decide", () => {
     }) as DecideDeps["complete"];
     const r = await handle(post(base), deps(c));
     expect(r.status).toBe(502);
-    expect((r.json as any).error).toBeTruthy();
+    expect((r.json as any).error).toBe("The AI request failed. Try again in a minute.");
     expect(JSON.stringify(r.json)).not.toContain(SENTINEL);
   });
   it("sixth request in a minute from one IP → 429", async () => {
@@ -117,5 +119,52 @@ describe("/api/decide", () => {
     for (const r of [await handle(post(base), deps()), await handle(post(base), deps(leaky)), await handle(post({ ...base, changedLines: -1 }), deps())]) {
       expect(JSON.stringify(r.json)).not.toContain(SENTINEL);
     }
+  });
+
+  const rulesOf = async (d: object, extra: object = {}) =>
+    ((await handle(post({ ...base, ...extra }), deps(fakeComplete(d)))).json as any).rules as { rule: string; pass: boolean }[];
+
+  it("rationale mentioning amount does not mark amount rules", async () => {
+    const r = await rulesOf({ qualifies: false, clause_id: 1, amount_near: "0", rationale: "amount exceeds clause maximum, max_request" });
+    expect(r.map((x) => x.rule)).toEqual(["decision well-formed", "model says it qualifies"]);
+    expect(r[1]!.pass).toBe(false);
+  });
+  it("zero amount fails the amount rule", async () => {
+    const r = await rulesOf({ qualifies: true, clause_id: 2, amount_near: "0", rationale: "x" });
+    expect(r[r.length - 1]).toEqual({ rule: "amount above zero and within the clause maximum", pass: false });
+  });
+  it("malformed amount fails the well-formed rule", async () => {
+    const r = await rulesOf({ qualifies: true, clause_id: 2, amount_near: "abc", rationale: "x" });
+    expect(r).toEqual([{ rule: "decision well-formed", pass: false }]);
+  });
+  it("rules stop at the first failure", async () => {
+    const r = await rulesOf({ qualifies: true, clause_id: 2, amount_near: "0.2", rationale: "x" }, { firstTime: false, nearAccount: "" });
+    expect(r.map((x) => x.rule)).toEqual(["decision well-formed", "model says it qualifies", "first-time contributor"]);
+    expect(r[2]!.pass).toBe(false);
+  });
+  it("result matches validate for the 3 presets", async () => {
+    const cases: [object, object, string][] = [
+      [base, { qualifies: true, clause_id: 2, amount_near: "0.2", rationale: "r" }, "would pay"],
+      [{ ...base, changedLines: 340, feature: true }, { qualifies: true, clause_id: 3, amount_near: "0.5", rationale: "r" }, "would go to a DAO vote"],
+      [{ ...base, firstTime: false }, { qualifies: true, clause_id: 2, amount_near: "0.2", rationale: "r" }, "would skip"],
+    ];
+    for (const [input, d, want] of cases) {
+      const j = (await handle(post(input), deps(fakeComplete(d)))).json as any;
+      expect(j.result).toBe(want);
+      if (want !== "would skip") expect(j.rules.every((x: any) => x.pass)).toBe(true);
+      else expect(j.rules.some((x: any) => !x.pass)).toBe(true);
+    }
+  });
+  it("503 when not configured, without calling upstream", async () => {
+    let called = false;
+    const c = (async () => { called = true; throw new Error("x"); }) as DecideDeps["complete"];
+    const r = await handle(post(base), { ...deps(c), apiKey: "" });
+    expect(r.status).toBe(503);
+    expect(called).toBe(false);
+  });
+  it("405 carries Allow: POST and oversized flag gives 413", async () => {
+    const r = await handle({ method: "GET", body: "", ip: "1.1.1.1" }, deps());
+    expect(r.headers).toEqual({ Allow: "POST" });
+    expect((await handle({ ...post(base), oversized: true }, deps())).status).toBe(413);
   });
 });

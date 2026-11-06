@@ -1,7 +1,7 @@
-import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD, type MandateView } from "@termwork/shared";
+import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD, nearToYocto, type MandateView } from "@termwork/shared";
 import { complete } from "../../agent/src/nearai";
 import { decisionMessages } from "../../agent/src/prompts";
-import { parseDecision, validate, type Action } from "../../agent/src/validate";
+import { parseDecision, validate, type Decision } from "../../agent/src/validate";
 import { checkLimit } from "./limits";
 
 export interface DecideDeps {
@@ -17,10 +17,13 @@ export interface HandleReq {
   method: string;
   body: string;
   ip: string;
+  /** Set by the Node handler when the body exceeded the limit and was not buffered. */
+  oversized?: boolean;
 }
 export interface HandleRes {
   status: number;
   json: unknown;
+  headers?: Record<string, string>;
 }
 
 const MAX_BODY = 2048;
@@ -61,22 +64,28 @@ function yoctoToNear(y: string): string {
   return frac ? `${whole}.${frac}` : whole;
 }
 
-/** Rules in the order validate() applies them, stopping at the first one that failed. */
-function rulesFor(action: Action, input: Input): { rule: string; pass: boolean; note?: string }[] {
+/**
+ * Rules in the order validate() applies them, stopping at the first failure. Computed only from the parsed
+ * answer, the request input and the demo mandate; never from validate's free-text summary.
+ */
+function rulesFor(answer: Decision | { error: string }, input: Input): { rule: string; pass: boolean; note?: string }[] {
   const out: { rule: string; pass: boolean; note?: string }[] = [];
   const stop = (rule: string, pass: boolean) => {
     out.push({ rule, pass });
     return !pass;
   };
-  const summary = action.kind === "log" ? action.summary : "";
-  if (stop("not already paid", !summary.includes("already paid"))) return out;
+  const d = "error" in answer ? null : answer;
+  if (stop("decision well-formed", d !== null && /^\d+(\.\d{1,24})?$/.test(d.amount_near))) return out;
+  if (!d) return out;
+  if (stop("model says it qualifies", d.qualifies)) return out;
   if (stop("first-time contributor", input.firstTime)) return out;
   if (stop("has NEAR account", input.nearAccount !== null)) return out;
-  const reachedAmount = action.kind !== "log" || /amount|clause maximum|max_request/.test(summary);
-  if (!reachedAmount) return out;
-  if (stop("amount within the clause maximum", !summary.includes("exceeds clause maximum"))) return out;
-  if (stop("amount within the maximum single request", !summary.includes("exceeds max_request"))) return out;
-  if (action.kind !== "log") out.push({ rule: "recipient exists on-chain", pass: true, note: "skipped in the playground" });
+  const clause = DEMO_MISSION.clauses.find((c) => c.id === d.clause_id);
+  const amount = BigInt(nearToYocto(d.amount_near));
+  const withinClause = !!clause && clause.pays && amount > 0n && (clause.max_amount === null || amount <= BigInt(clause.max_amount));
+  if (stop("amount above zero and within the clause maximum", withinClause)) return out;
+  if (stop("amount within the maximum single request", amount <= BigInt(DEMO_MAX_REQUEST))) return out;
+  out.push({ rule: "recipient exists on-chain", pass: true, note: "skipped in the playground" });
   return out;
 }
 
@@ -85,12 +94,14 @@ function scrub(res: HandleRes, secrets: string[]): HandleRes {
   if (!live.length) return res;
   let text = JSON.stringify(res.json);
   for (const s of live) text = text.split(s).join("[redacted]").split(JSON.stringify(s).slice(1, -1)).join("[redacted]");
-  return { status: res.status, json: JSON.parse(text) };
+  return { ...res, json: JSON.parse(text) };
 }
 
 async function run(req: HandleReq, deps: DecideDeps): Promise<HandleRes> {
-  if (req.method !== "POST") return { status: 405, json: { error: "use POST" } };
-  if (new TextEncoder().encode(req.body).length > MAX_BODY) return { status: 413, json: { error: "request body too large (max 2048 bytes)" } };
+  if (req.method !== "POST") return { status: 405, json: { error: "use POST" }, headers: { Allow: "POST" } };
+  if (req.oversized || new TextEncoder().encode(req.body).length > MAX_BODY) return { status: 413, json: { error: "request body too large (max 2048 bytes)" } };
+  if (!deps.apiKey || !deps.model)
+    return { status: 503, json: { error: "The live AI demo isn't configured on this deployment." } };
   const input = parseInput(req.body);
   if ("error" in input) return { status: 400, json: input };
 
@@ -127,9 +138,8 @@ async function run(req: HandleReq, deps: DecideDeps): Promise<HandleRes> {
   let out: Awaited<ReturnType<typeof complete>>;
   try {
     out = await deps.complete(decisionMessages(mandate, pr), key, { model: deps.model });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "unknown error";
-    return { status: 502, json: { error: `The model call failed: ${msg}`.slice(0, 300) } };
+  } catch {
+    return { status: 502, json: { error: "The AI request failed. Try again in a minute." } };
   }
   const answer = parseDecision(out.text);
   const action = await validate(answer, pr, mandate, new Set(), async () => true);
@@ -137,7 +147,7 @@ async function run(req: HandleReq, deps: DecideDeps): Promise<HandleRes> {
   const amountNear = action.kind === "log" ? "0" : yoctoToNear(action.amountYocto);
   return {
     status: 200,
-    json: { answer, rules: rulesFor(action, input), result, amountNear, receipt: out.receipt, receiptHash: out.hash },
+    json: { answer, rules: rulesFor(answer, input), result, amountNear, receipt: out.receipt, receiptHash: out.hash },
   };
 }
 
@@ -145,16 +155,17 @@ export async function handle(req: HandleReq, deps: DecideDeps): Promise<HandleRe
   return scrub(await run(req, deps), deps.secrets ?? []);
 }
 
-async function readBody(req: AsyncIterable<Buffer | string>): Promise<string> {
+/** Buffers up to the limit; beyond it, keeps draining (discarding) so the connection is not reset. */
+async function readBody(req: AsyncIterable<Buffer | string>): Promise<{ body: string; oversized: boolean }> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const c of req) {
     const b = typeof c === "string" ? Buffer.from(c) : c;
     size += b.length;
-    if (size > MAX_BODY * 4) break; // enough to trip the 413 without buffering a flood
-    chunks.push(b);
+    if (size > 1_000_000) break;
+    if (size <= MAX_BODY) chunks.push(b);
   }
-  return Buffer.concat(chunks).toString("utf8");
+  return size > MAX_BODY ? { body: "", oversized: true } : { body: Buffer.concat(chunks).toString("utf8"), oversized: false };
 }
 
 /** Vercel Node handler. */
@@ -162,19 +173,24 @@ export default async function handler(
   req: { method?: string; headers: Record<string, string | string[] | undefined>; socket?: { remoteAddress?: string } } & AsyncIterable<Buffer | string>,
   res: { statusCode: number; setHeader(k: string, v: string): void; end(s: string): void },
 ): Promise<void> {
-  const xff = req.headers["x-forwarded-for"];
-  const first = (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim();
-  const ip = first || req.socket?.remoteAddress || "unknown";
-  const secrets = [process.env.NEARAI_API_KEY ?? ""];
-  const r = await handle({ method: req.method ?? "GET", body: req.method === "POST" ? await readBody(req) : "", ip }, {
+  const h = (k: string) => {
+    const v = req.headers[k];
+    return (Array.isArray(v) ? v[0] : v)?.split(",")[0]?.trim() || undefined;
+  };
+  const ip = h("x-vercel-forwarded-for") || h("x-real-ip") || h("x-forwarded-for") || req.socket?.remoteAddress || "unknown";
+  const apiKey = process.env.NEARAI_API_KEY ?? "";
+  const { body, oversized } = req.method === "POST" ? await readBody(req) : { body: "", oversized: false };
+  const r = await handle({ method: req.method ?? "GET", body, ip, oversized }, {
     complete,
     now: () => Date.now(),
-    secrets,
-    apiKey: process.env.NEARAI_API_KEY ?? "",
-    model: process.env.NEARAI_MODEL,
+    secrets: [apiKey],
+    apiKey,
+    model: process.env.NEARAI_MODEL ?? "",
   });
   res.statusCode = r.status;
   res.setHeader("content-type", "application/json");
   res.setHeader("cache-control", "no-store");
+  for (const [k, v] of Object.entries(r.headers ?? {})) res.setHeader(k, v);
+  if (r.status === 413) res.setHeader("connection", "close");
   res.end(JSON.stringify(r.json));
 }

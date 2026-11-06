@@ -20,11 +20,16 @@ const OK = (verified: boolean) => ({
 const respond = (status: number, body: unknown) =>
   vi.fn(async () => ({ ok: status < 300, status, json: async () => body }));
 
+const realCreate = URL.createObjectURL;
+const realRevoke = URL.revokeObjectURL;
 beforeEach(() => {
-  vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() }));
+  URL.createObjectURL = vi.fn(() => "blob:x");
+  URL.revokeObjectURL = vi.fn();
 });
 afterEach(() => {
   cleanup();
+  URL.createObjectURL = realCreate;
+  URL.revokeObjectURL = realRevoke;
   vi.unstubAllGlobals();
 });
 
@@ -84,5 +89,32 @@ describe("RunYourself", () => {
     render(<RunYourself />);
     expect(screen.getByText(/No API keys needed\. It uses about 30 testnet NEAR from the public faucet/)).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /^Copy/ })).toHaveLength(3);
+  });
+
+  it("links to README sections that exist", () => {
+    render(<RunYourself />);
+    const hrefs = screen.getAllByRole("link", { name: "README section" }).map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual([
+      "https://github.com/Mramaran/termwork#the-end-to-end-demo",
+      "https://github.com/Mramaran/termwork#the-end-to-end-demo",
+      "https://github.com/Mramaran/termwork#tests",
+    ]);
+  });
+
+  it("copy shows Copied on success", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    render(<RunYourself />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy command 1" }));
+    expect(await screen.findByText(/Copied/)).toBeTruthy();
+    expect(writeText).toHaveBeenCalled();
+  });
+
+  it("copy failure says so", async () => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: async () => { throw new Error("no"); } }, configurable: true });
+    document.execCommand = vi.fn(() => false);
+    render(<RunYourself />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy command 1" }));
+    expect(await screen.findByText(/Copy failed/)).toBeTruthy();
   });
 });

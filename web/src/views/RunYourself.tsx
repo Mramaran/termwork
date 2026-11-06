@@ -1,17 +1,17 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const BLOCKS = [
   {
-    title: "Free run, no keys",
-    text: "No API keys needed. It uses about 30 testnet NEAR from the public faucet (rate-limited) and a `.env` copied from `.env.example`. Takes about 12 minutes on testnet.",
+    title: "Free run, no keys (about 12 minutes on testnet)",
+    text: "No API keys needed. It uses about 30 testnet NEAR from the public faucet (rate-limited) and a `.env` copied from `.env.example`.",
     cmd: "npm ci\nAGENT_MODE=fixture npm run -w scripts demo",
-    href: "https://github.com/Mramaran/termwork#run-it",
+    href: "https://github.com/Mramaran/termwork#the-end-to-end-demo",
   },
   {
     title: "With your own NEAR AI key",
     text: "Add NEARAI_API_KEY and NEARAI_MODEL to `.env`, then run the demo against the real model.",
     cmd: "npm run -w scripts demo",
-    href: "https://github.com/Mramaran/termwork#run-it",
+    href: "https://github.com/Mramaran/termwork#the-end-to-end-demo",
   },
   {
     title: "Tests only",
@@ -21,10 +21,10 @@ const BLOCKS = [
   },
 ];
 
-async function copyText(text: string): Promise<void> {
+async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
-    return;
+    return true;
   } catch {
     /* fall through to the legacy path */
   }
@@ -35,14 +35,25 @@ async function copyText(text: string): Promise<void> {
   document.body.appendChild(ta);
   ta.select();
   try {
-    document.execCommand("copy");
+    return document.execCommand("copy");
+  } catch {
+    return false;
   } finally {
     ta.remove();
   }
 }
 
 export function RunYourself() {
-  const [copied, setCopied] = useState<number | null>(null);
+  const [copied, setCopied] = useState<{ i: number; ok: boolean } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(timer.current), []);
+  function copy(i: number, cmd: string) {
+    void copyText(cmd).then((ok) => {
+      setCopied({ i, ok });
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(null), 2000);
+    });
+  }
   return (
     <section className="runy" aria-labelledby="yourself-h">
       <h2 id="yourself-h">Run it yourself</h2>
@@ -58,11 +69,11 @@ export function RunYourself() {
           <pre>
             <code>{b.cmd}</code>
           </pre>
-          <button type="button" className="btn" onClick={() => void copyText(b.cmd).then(() => setCopied(i))}>
+          <button type="button" className="btn" onClick={() => copy(i, b.cmd)}>
             Copy command {i + 1}
           </button>
           <span className="small" role="status">
-            {copied === i ? " Copied" : ""}
+            {copied?.i === i ? (copied.ok ? " Copied" : " Copy failed, select the text instead") : ""}
           </span>
         </div>
       ))}

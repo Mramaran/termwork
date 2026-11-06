@@ -1,17 +1,21 @@
 import { useState, type SyntheticEvent } from "react";
-import { loadSnapshot, type ProposalView } from "../chain";
+import { loadSnapshot, MANDATE_ID, type ProposalView } from "../chain";
 import { Proposals } from "../Proposals";
 
 export function LiveDao() {
   const [proposals, setProposals] = useState<ProposalView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function onToggle(e: SyntheticEvent<HTMLDetailsElement>) {
-    if (!e.currentTarget.open || proposals) return;
+  function load() {
+    setError(null);
     loadSnapshot().then(
       (s) => setProposals(s.proposals),
       (err: unknown) => setError((err as Error).message),
     );
+  }
+
+  function onToggle(e: SyntheticEvent<HTMLDetailsElement>) {
+    if (e.currentTarget.open && !proposals && MANDATE_ID) load();
   }
 
   return (
@@ -20,12 +24,21 @@ export function LiveDao() {
       <p className="small">
         Council members can vote on open proposals here with Intear Wallet or MyNearWallet, on testnet. The recorded run above is finished, so there may be nothing open.
       </p>
-      {error && (
-        <p className="err" role="alert">
-          Could not load proposals: {error}
-        </p>
+      {!MANDATE_ID ? (
+        <p className="empty">Live voting isn't configured on this deployment.</p>
+      ) : (
+        <>
+          {error && (
+            <p className="err" role="alert">
+              Could not load proposals: {error}{" "}
+              <button type="button" className="btn" onClick={load}>
+                Retry
+              </button>
+            </p>
+          )}
+          {proposals ? <Proposals proposals={proposals} /> : !error && <p className="empty">Loading proposals</p>}
+        </>
       )}
-      {proposals ? <Proposals proposals={proposals} /> : !error && <p className="empty">Loading proposals</p>}
     </details>
   );
 }

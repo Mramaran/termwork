@@ -6,19 +6,17 @@ import { TryLive } from "./views/TryLive";
 import { WatchRun } from "./views/WatchRun";
 
 type Tab = "watch" | "live" | "yourself";
-const TABS: { id: Tab; label: string; icon: string; intro: string }[] = [
-  { id: "watch", label: "Watch our run", icon: "M4 2l10 6-10 6z", intro: "" },
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: "watch", label: "Watch our run", icon: "M4 2l10 6-10 6z" },
   {
     id: "live",
     label: "Try the AI live",
-    icon: "M9 1L3 9h5l-1 6 6-8H8z",
-    intro: "Describe a pull request and ask the same model, with the same rules, what the agent would do. Nothing is paid.",
+    icon: "M9 1L3 9h5l-1 6 6-8H8z"
   },
   {
     id: "yourself",
     label: "Run it yourself",
-    icon: "M2 4l4 4-4 4M8 12h6",
-    intro: "Three commands reproduce the whole story on testnet: the free fixture demo, the demo with your own NEAR AI key, and the tests.",
+    icon: "M2 4l4 4-4 4M8 12h6"
   },
 ];
 

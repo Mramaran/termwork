@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { loadRun, type RunData } from "./run";
+import { LiveDao } from "./views/LiveDao";
+import { RunYourself } from "./views/RunYourself";
+import { TryLive } from "./views/TryLive";
 import { WatchRun } from "./views/WatchRun";
 
 type Tab = "watch" | "live" | "yourself";
@@ -46,20 +49,6 @@ const Icon = ({ d, stroke }: { d: string; stroke: boolean }) => (
   </svg>
 );
 
-function Placeholder({ tab }: { tab: (typeof TABS)[number] }) {
-  return (
-    <section className="placeholder" aria-labelledby="tab-intro">
-      <h2 id="tab-intro">{tab.label}</h2>
-      <p>{tab.intro}</p>
-      <div className="disabled-panel" aria-disabled="true">
-        <button type="button" className="btn" disabled>
-          {tab.id === "live" ? "Ask the agent" : "Copy command"}
-        </button>
-      </div>
-    </section>
-  );
-}
-
 export function App() {
   const [tab, setTab] = useState<Tab>(tabFromHash);
   const [theme, setTheme] = useState<Theme>(initialTheme);
@@ -90,8 +79,6 @@ export function App() {
       /* storage blocked */
     }
   }, [theme]);
-
-  const current = TABS.find((t) => t.id === tab)!;
 
   return (
     <div className="wrap">
@@ -135,17 +122,17 @@ export function App() {
             </button>
           </p>
         )}
-        {tab === "watch" ? (
-          run ? (
+        {tab === "watch" &&
+          (run ? (
             <WatchRun run={run} />
           ) : error ? (
             <p className="err" role="alert">Could not load the recorded run: {error}</p>
           ) : (
             <p className="empty">Loading the recorded run</p>
-          )
-        ) : (
-          <Placeholder tab={current} />
-        )}
+          ))}
+        {tab === "watch" && <LiveDao />}
+        {tab === "live" && <TryLive />}
+        {tab === "yourself" && <RunYourself />}
       </main>
       <footer>Testnet only. The run was recorded once; the agent-key check reads the chain live.</footer>
     </div>

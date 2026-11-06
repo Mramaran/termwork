@@ -58,9 +58,14 @@ export function Proposals({ proposals }: { proposals: ProposalView[] }) {
             </button>
           </>
         ) : (
-          <button className="btn" onClick={() => void connect().catch((e: Error) => setErr(e.message))}>
-            Connect MyNearWallet to vote
-          </button>
+          <>
+            <button className="btn" onClick={() => void connect("intear-wallet").catch((e: Error) => setErr(e.message))}>
+              Connect Intear
+            </button>
+            <button className="btn" onClick={() => void connect("my-near-wallet").catch((e: Error) => setErr(e.message))}>
+              Connect MyNearWallet
+            </button>
+          </>
         )}
         <a className="small" href={explorerAccount(DAO_ID)} target="_blank" rel="noreferrer">
           {DAO_ID}

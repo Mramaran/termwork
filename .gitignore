@@ -15,6 +15,7 @@ build/
 !contracts/mandate/tests/res/*.wasm
 !contracts/mandate/res/*.wasm
 web/public/receipts/
+web/.vite/
 
 # ── Runtime output ──
 demo-output.json

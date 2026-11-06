@@ -57,18 +57,24 @@ That run (2026-11-06, `AGENT_MODE=live`) used the agent account `steward.termwor
 
 ### The web page
 
-Live at <https://termwork-nu.vercel.app>. It has three tabs: **Watch our run** (replays the recorded testnet run step by step), **Try the AI live** (sends a pull request you describe to the real model and shows which fixed rules pass) and **Run it yourself** (the commands to reproduce the run).
+Live at <https://termwork-nu.vercel.app>. It has three tabs:
+
+- **Watch our run** replays the recorded testnet run as five steps (Hire, Work, Vote, Renew, Fired). Each step has a feed of what happened and a "Check it yourself" list of links to the NEAR explorer and to the signed AI receipts. A tick appears only after the page has confirmed the claim (a transaction hash is present, a receipt loads with `verified: true`, the report hash matches on-chain, the agent account has no keys left).
+- **Try the AI live** sends a pull request you describe to the real model and shows which fixed rules pass. Nothing is paid.
+- **Run it yourself** has the commands to reproduce the run on testnet.
+
+Local development:
 
 1. Put `VITE_MANDATE_ID`, `VITE_DAO_ID` and `VITE_NETWORK=testnet` in the repo-root `.env` (`web/vite.config.ts` sets `envDir` to the repo root).
-2. `npm run -w web dev` -> Vite prints a local URL. The page shows the agent key card, budget, mission, work log, open proposals and the renewal case, read from testnet.
+2. `npm run -w web dev` -> Vite prints a local URL. The "Try the AI live" tab needs the `/api/decide` function, which only exists on Vercel.
 3. Voting from the page goes through a NEAR wallet (Intear or MyNearWallet) and is best-effort. The CLI vote in step 9 always works.
 
 Deploy to Vercel (static page plus the `/api/decide` function behind "Try the AI live"):
 
-1. Once: `npx vercel link --project termwork` at the repo root, and set `NEARAI_API_KEY` and `NEARAI_MODEL` in the Vercel project's environment variables (Production and Preview). The function reads them at request time.
-2. `npm run -w scripts deploy-vercel` makes a preview deployment; `npm run -w scripts deploy-vercel -- --prod` updates https://termwork-nu.vercel.app. The script builds `web`, bundles `web/api/decide.ts` with esbuild and runs `vercel deploy --prebuilt`.
+1. Once: `npx vercel link --project termwork` at the repo root. The Vercel project must have `NEARAI_API_KEY` and `NEARAI_MODEL` in its environment variables (Production and Preview); the function reads them at request time, and without them it answers 503.
+2. `npm run -w scripts deploy-vercel` makes a preview deployment; `npm run -w scripts deploy-vercel -- --prod` updates https://termwork-nu.vercel.app. The script first runs `npm test` and the web typecheck, builds `web`, bundles `web/api/decide.ts` with esbuild, checks that the bundle loads and exports a handler, then runs a pinned Vercel CLI with `deploy --prebuilt`.
 
-`.github/workflows/pages.yml` builds `web` and deploys it to GitHub Pages on every push to `main`. For it to show your deployment, set the repository variables `VITE_MANDATE_ID` and `VITE_DAO_ID` (Settings → Secrets and variables → Actions → Variables) and set Settings → Pages → Source to "GitHub Actions". The workflow sets `BASE_PATH=/<repo-name>/` (taken from the repository name) so Vite's `base` matches `https://<owner>.github.io/<repo-name>/`.
+GitHub Pages is not used. Leave `.github/workflows/pages.yml` disabled in the repository settings: a Pages build has no `/api/decide`, so the live tab would not work there.
 
 ## How it works
 

@@ -4,17 +4,23 @@
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const out = join(root, ".vercel", "output");
+// Pinned so a new CLI release can not break the deploy.
+const VERCEL_CLI = "vercel@65.12.1";
 const prod = process.argv.includes("--prod");
 
 function run(cmd: string, args: string[], env: Record<string, string> = {}): void {
   const r = spawnSync(cmd, args, { cwd: root, stdio: "inherit", shell: process.platform === "win32", env: { ...process.env, ...env } });
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(" ")} failed (exit ${r.status})`);
 }
+
+// 0. gate: tests and typecheck must pass before anything is built or shipped
+run("npm", ["test"]);
+run("npm", ["run", "-w", "web", "typecheck"]);
 
 // 1. build the page (BASE_PATH deliberately unset: the site lives at /)
 run("npm", ["run", "-w", "web", "build"], {
@@ -42,8 +48,17 @@ await build({
   // CJS deps inside an ESM bundle need require
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
 });
+// gate: the bundle must load and export a handler
+{
+  const r = spawnSync(
+    process.execPath,
+    ["-e", "import(process.argv[1]).then((m) => process.exit(typeof m.default === 'function' ? 0 : 1), (e) => { console.error(e); process.exit(2); })", pathToFileURL(join(fn, "index.mjs")).href],
+    { cwd: root, stdio: "inherit" },
+  );
+  if (r.status !== 0) throw new Error("Bundled function check failed: index.mjs did not load or its default export is not a function. Not deploying.");
+}
 writeFileSync(join(fn, "package.json"), JSON.stringify({ type: "module" }));
 writeFileSync(join(fn, ".vc-config.json"), JSON.stringify({ runtime: "nodejs22.x", handler: "index.mjs", launcherType: "Nodejs", maxDuration: 60 }));
 
 // 5. deploy
-run("npx", ["--yes", "vercel@latest", "deploy", "--prebuilt", "--yes", ...(prod ? ["--prod"] : [])]);
+run("npx", ["--yes", VERCEL_CLI, "deploy", "--prebuilt", "--yes", ...(prod ? ["--prod"] : [])]);

@@ -1,0 +1,112 @@
+import { createHash } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { explorerAccount, explorerTx } from "./chain";
+import { confirmCheck, reportHashMatches, steps, type CheckItem, type FeedLine } from "./run";
+import { FIXTURE } from "./run.fixture";
+
+const S = steps(FIXTURE);
+const ctxBase = { keys: null, receipt: async () => null, reportOk: null };
+const texts = (f: FeedLine[]) => f.map((l) => l.text);
+
+describe("steps", () => {
+  it("work feed shows AI said yes, rules said no for PR 5", () => {
+    const line = S.work.feed.find((l) => l.text.includes("AI said yes, the rules said no"));
+    expect(line).toBeDefined();
+    expect(line!.detail?.ai?.qualifies).toBe(true);
+    expect(line!.detail?.rules).toContain("not a first-time contributor");
+  });
+
+  it("feed amounts read in NEAR not yocto", () => {
+    for (const id of ["hire", "work", "vote", "fired"] as const) {
+      for (const l of S[id].feed) expect(l.text, `${id}: ${l.text}`).not.toMatch(/\d{10,}|yocto/i);
+    }
+    expect(texts(S.work.feed).join("\n")).toContain("0.2 NEAR");
+    expect(texts(S.hire.feed).join("\n")).toContain("2 NEAR");
+  });
+
+  it("fired step lists Fired 2.433 NEAR and Swept 0.115 NEAR separately", () => {
+    const t = texts(S.fired.feed);
+    expect(t.filter((x) => x.includes("Fired 2.433 NEAR"))).toHaveLength(1);
+    expect(t.filter((x) => x.includes("Swept 0.115 NEAR"))).toHaveLength(1);
+    expect(t.some((x) => x.includes("Fired 2.433 NEAR") && x.includes("Swept"))).toBe(false);
+  });
+
+  it("renew step shows the report verbatim plus an On-chain figures line and the note", () => {
+    const t = texts(S.renew.feed);
+    expect(t).toContain(FIXTURE.renewal.reportText);
+    expect(t).toContain("On-chain figures: budget 2 NEAR, spent 0.6 NEAR, available at report time 1.4 NEAR");
+    expect(t).toContain("The agent's report states amounts in yoctoNEAR and calls the available 1.4 NEAR its 'initial budget'. The contract's figures above are authoritative.");
+  });
+
+  it("renew checklist has separate report-hash and receipt items", () => {
+    const kinds = S.renew.checks.map((c) => c.kind);
+    expect(kinds).toContain("report-hash");
+    const r = S.renew.checks.find((c) => c.kind === "receipt")!;
+    expect(r.label).toBe("Renewal AI receipt");
+    expect(r.receiptHash).toBe(FIXTURE.renewal.receiptHash);
+    expect(S.renew.checks.some((c) => c.label === "Report hash matches on-chain")).toBe(true);
+  });
+
+  it("hire agent key item links the second vote tx", () => {
+    const k = S.hire.checks.find((c) => /agent key created/i.test(c.label))!;
+    expect(k.tx).toBe(FIXTURE.hire.voteTxs[1]);
+    expect(k.href).toBe(explorerTx(FIXTURE.hire.voteTxs[1]!));
+  });
+
+  it("null tx renders explorer account link labelled \"see on explorer\"", async () => {
+    const run = structuredClone(FIXTURE);
+    run.prs[0]!.tx = null;
+    const item = steps(run).work.checks.find((c) => c.label.includes("see on explorer"))!;
+    expect(item.href).toBe(explorerAccount(run.mandate));
+    expect(await confirmCheck(item, ctxBase)).toBe(false);
+  });
+
+  it("fired step ends with a live keys check and a recorded attempt", () => {
+    expect(S.fired.checks.some((c) => c.kind === "live-keys")).toBe(true);
+    const rec = S.fired.checks.filter((c) => c.kind === "recorded");
+    expect(rec.length).toBeGreaterThan(0);
+  });
+});
+
+describe("confirmCheck", () => {
+  it("tx ticked when hash present", async () => {
+    expect(await confirmCheck({ label: "x", href: "h", kind: "tx", tx: "abc" }, ctxBase)).toBe(true);
+    expect(await confirmCheck({ label: "x", href: "h", kind: "tx" }, ctxBase)).toBe(false);
+  });
+
+  it("checklist item for unverified receipt is not ticked", async () => {
+    const item: CheckItem = { label: "r", href: "h", kind: "receipt", receiptHash: "a".repeat(64) };
+    expect(await confirmCheck(item, { ...ctxBase, receipt: async () => ({ verified: false }) })).toBe(false);
+    expect(await confirmCheck(item, { ...ctxBase, receipt: async () => null })).toBe(false);
+    expect(await confirmCheck(item, { ...ctxBase, receipt: async () => ({ verified: true }) })).toBe(true);
+  });
+
+  it("recorded item is never ticked", async () => {
+    const item: CheckItem = { label: "r", href: null, kind: "recorded", tx: "abc" };
+    expect(await confirmCheck(item, { keys: [], receipt: async () => ({ verified: true }), reportOk: true })).toBe(false);
+  });
+
+  it("live-keys item ticked only for empty list", async () => {
+    const item: CheckItem = { label: "k", href: "h", kind: "live-keys" };
+    expect(await confirmCheck(item, { ...ctxBase, keys: [] })).toBe(true);
+    expect(await confirmCheck(item, { ...ctxBase, keys: null })).toBe(false);
+    expect(await confirmCheck(item, { ...ctxBase, keys: [{ public_key: "k", access_key: { nonce: 0, permission: "FullAccess" } }] })).toBe(false);
+  });
+
+  it("report-hash item follows reportOk", async () => {
+    const item: CheckItem = { label: "h", href: null, kind: "report-hash" };
+    expect(await confirmCheck(item, { ...ctxBase, reportOk: true })).toBe(true);
+    expect(await confirmCheck(item, { ...ctxBase, reportOk: false })).toBe(false);
+    expect(await confirmCheck(item, { ...ctxBase, reportOk: null })).toBe(false);
+  });
+});
+
+describe("reportHashMatches", () => {
+  it("true for report text and its hash", async () => {
+    const hex = createHash("sha256").update(FIXTURE.renewal.reportText, "utf8").digest("hex");
+    expect(hex).toBe(FIXTURE.renewal.reportHash);
+    expect(await reportHashMatches(FIXTURE.renewal.reportText, hex)).toBe(true);
+    expect(await reportHashMatches(FIXTURE.renewal.reportText, hex.toUpperCase())).toBe(true);
+    expect(await reportHashMatches(FIXTURE.renewal.reportText + "x", hex)).toBe(false);
+  });
+});

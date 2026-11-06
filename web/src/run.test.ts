@@ -81,6 +81,15 @@ describe("confirmCheck", () => {
     expect(await confirmCheck(item, { ...ctxBase, receipt: async () => ({ verified: true }) })).toBe(true);
   });
 
+  it("receipt item is not ticked when the fetch rejects", async () => {
+    const item: CheckItem = { label: "r", href: "h", kind: "receipt", receiptHash: "a".repeat(64) };
+    expect(await confirmCheck(item, { ...ctxBase, receipt: async () => { throw new Error("offline"); } })).toBe(false);
+  });
+
+  it("work log item is labelled as recorded on-chain", () => {
+    expect(S.work.checks.some((c) => c.label === "Work log (recorded on-chain)")).toBe(true);
+  });
+
   it("recorded item is never ticked", async () => {
     const item: CheckItem = { label: "r", href: null, kind: "recorded", tx: "abc" };
     expect(await confirmCheck(item, { keys: [], receipt: async () => ({ verified: true }), reportOk: true })).toBe(false);

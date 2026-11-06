@@ -143,7 +143,7 @@ function workStep(run: RunData): Step {
   for (const pr of run.prs) {
     if (pr.receiptHash) checks.push({ label: `AI receipt for PR #${pr.number}`, href: publicUrl(`receipts/${pr.receiptHash}.json`), kind: "receipt", receiptHash: pr.receiptHash });
   }
-  checks.push({ label: "Work log on-chain", href: explorerAccount(run.mandate), kind: "recorded" });
+  checks.push({ label: "Work log (recorded on-chain)", href: explorerAccount(run.mandate), kind: "recorded" });
   return { title: "Work", feed: run.prs.flatMap((pr) => prLines(run, pr)), checks };
 }
 
@@ -228,7 +228,12 @@ export async function confirmCheck(
     case "tx":
       return !!item.tx;
     case "receipt":
-      return item.receiptHash ? (await ctx.receipt(item.receiptHash))?.verified === true : false;
+      if (!item.receiptHash) return false;
+      try {
+        return (await ctx.receipt(item.receiptHash))?.verified === true;
+      } catch {
+        return false;
+      }
     case "live-keys":
       return ctx.keys !== null && ctx.keys.length === 0;
     case "report-hash":

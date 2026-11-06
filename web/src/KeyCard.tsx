@@ -3,16 +3,18 @@ import { classifyKeyError, explorerAccount, keyEndLink, keyStatus, type AccessKe
 
 interface Props {
   mandateId: string;
-  keys: AccessKeyInfo[];
+  /** null when the live read failed. */
+  keys: AccessKeyInfo[] | null;
   status: Status;
   demo: DemoOutput | null;
 }
 
 export function KeyCard({ mandateId, keys, status, demo }: Props) {
-  const state = keyStatus(keys);
+  const unknown = keys === null;
+  const state = keyStatus(keys ?? []);
   const awaiting = status === "Unhired";
-  const tone = awaiting ? "idle" : state;
-  const tx = state === "deleted" && !awaiting ? keyEndLink(status, mandateId, demo) : null;
+  const tone = awaiting || unknown ? "idle" : state;
+  const tx = state === "deleted" && !awaiting && !unknown ? keyEndLink(status, mandateId, demo) : null;
   const attempt = demo?.agentAttempt;
   const attemptKind = attempt ? classifyKeyError(`${attempt.result} ${attempt.rpcError}`) : null;
 
@@ -22,9 +24,11 @@ export function KeyCard({ mandateId, keys, status, demo }: Props) {
         <span className="kc-eyebrow">Agent key</span>
         <span className="kc-lamp" aria-hidden="true" />
       </div>
-      <div className="kc-state">{awaiting ? "Not issued yet" : state === "live" ? "Key live" : "Key deleted"}</div>
+      <div className="kc-state">{awaiting ? "Not issued yet" : unknown ? "Fired, per the recording" : state === "live" ? "Key live" : "Key deleted"}</div>
       <p className="kc-line">
-        {awaiting
+        {unknown
+          ? "Couldn't check the chain right now. The recorded run ended with the agent's key deleted."
+          : awaiting
           ? "The mandate holds no keys until the DAO votes the hire through."
           : state === "live"
             ? `One function-call key, scoped to this mandate. The DAO can end it with a vote, or the clock will.`
@@ -38,9 +42,9 @@ export function KeyCard({ mandateId, keys, status, demo }: Props) {
         </a>
       )}
       <ul className="kc-keys">
-        {keys.length === 0 ? <li className="kc-none">access keys on {mandateId}: none</li> : keys.map((k) => <li key={k.public_key}>{k.public_key.slice(0, 18)}…</li>)}
+        {unknown ? <li className="kc-none">access keys on {mandateId}: couldn't check right now</li> : keys.length === 0 ? <li className="kc-none">access keys on {mandateId}: none</li> : keys.map((k) => <li key={k.public_key}>{k.public_key.slice(0, 18)}…</li>)}
       </ul>
-      {attempt && state === "deleted" && (
+      {attempt && state === "deleted" && !unknown && (
         <div className="kc-attempt">
           <span className="kc-eyebrow">Last attempt by the agent</span>
           <p>

@@ -41,6 +41,17 @@ describe("WatchRun", () => {
     await waitFor(() => expect(screen.getByText(/Keys on this account right now: none/)).toBeTruthy());
   });
 
+  it("Replay the run starts from Hire and Pause stops it; selecting a step shows it in full", () => {
+    render(<WatchRun run={FIXTURE} />);
+    fireEvent.click(screen.getByRole("button", { name: "Replay the run" }));
+    expect(stepBtn("Hire").getAttribute("aria-current")).toBe("step");
+    expect(screen.getAllByRole("log")[0]!.querySelectorAll(".entry")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(screen.getByRole("button", { name: "Replay the run" })).toBeTruthy();
+    fireEvent.click(stepBtn("Work"));
+    expect(screen.getAllByText(/^PR #\d+ "/)).toHaveLength(5);
+  });
+
   it("clicking Work shows five PR lines with AI reasons", () => {
     render(<WatchRun run={FIXTURE} />);
     fireEvent.click(stepBtn("Work"));

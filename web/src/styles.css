@@ -139,7 +139,11 @@ nav.tabs a[aria-current] { background: var(--ok); border-color: var(--ok); color
 .revoked .now { font-size: 0.9rem; margin-top: 8px; }
 .revoked.active { background: var(--ok); color: var(--on-ok); }
 @keyframes flip-in { from { transform: rotateX(90deg); opacity: 0; } to { transform: none; opacity: 1; } }
-.revoked:not(.active) { animation: flip-in 0.5s ease-out; transform-origin: top; }
+.revoked.flip { animation: flip-in 0.5s ease-out; transform-origin: top; }
+.revoked.pending { opacity: 0; }
+.replay-bar { margin: 12px 0 0; }
+.replay-btn { font: inherit; font-weight: 700; padding: 8px 16px; border: 1px solid var(--text); border-radius: var(--r-small); background: transparent; color: var(--text); cursor: pointer; }
+.replay-btn:hover { background: var(--text); color: var(--bg); }
 
 ol.steps { list-style: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 18px 0; padding: 0; counter-reset: s; }
 ol.steps li { counter-increment: s; border: 1px solid var(--line); border-radius: var(--r-small); overflow: hidden; }

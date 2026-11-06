@@ -4,8 +4,10 @@ import { KeyCard } from "../KeyCard";
 import { confirmCheck, reportHashMatches, steps, type RunData, type StepId } from "../run";
 import { Checklist } from "./Checklist";
 import { Feed, Legend } from "./Feed";
-import { Stepper } from "./Stepper";
+import { Stepper, STEP_ORDER } from "./Stepper";
+import { useReplay } from "./useReplay";
 
+const STEP_MS = 4000;
 const POLL_MS = 15_000;
 const MAX_BACKOFF_MS = 120_000;
 
@@ -44,10 +46,12 @@ const fmtDate = (iso: string): string => {
 };
 
 export function WatchRun({ run }: { run: RunData }) {
-  const [selected, setSelected] = useState<StepId>("fired");
   const [focusPr, setFocusPr] = useState<number | null>(null);
   const { keys, failed } = useLiveKeys(run.mandate);
   const all = useMemo(() => steps(run), [run]);
+  const lineCounts = useMemo(() => Object.fromEntries(Object.entries(all).map(([id, s]) => [id, s.feed.length])) as Record<StepId, number>, [all]);
+  const replay = useReplay(STEP_ORDER, { msPerStep: STEP_MS, lineCounts });
+  const selected = replay.step;
   const [receipts, setReceipts] = useState<Record<string, Receipt | null>>({});
   const [reportOk, setReportOk] = useState<boolean | null>(null);
   const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
@@ -112,7 +116,7 @@ export function WatchRun({ run }: { run: RunData }) {
   const cite = (n: number) => {
     const pr = run.prs.find((p) => p.logIndex === n);
     setFocusPr(pr ? pr.number : null);
-    setSelected("work");
+    replay.select("work");
   };
 
   return (
@@ -134,24 +138,33 @@ export function WatchRun({ run }: { run: RunData }) {
           <dt>Recorded</dt>
           <dd>{fmtDate(run.recordedAt)}</dd>
         </dl>
-        <div className={`revoked${status === "Active" ? " active" : ""}`} role="status">
+        <div className={`revoked${status === "Active" ? " active" : ""}${replay.replayed ? (selected === "fired" ? " flip" : " pending") : ""}`} role="status">
           <strong>{status}</strong>
           <span className="now">{note}</span>
         </div>
       </section>
 
+      <div className="replay-bar">
+        {replay.playing ? (
+          <button type="button" className="replay-btn" onClick={replay.pause}>Pause</button>
+        ) : (
+          <button type="button" className="replay-btn" onClick={replay.play}>Replay the run</button>
+        )}
+      </div>
+      <p className="sr" aria-live="polite">{`Step ${STEP_ORDER.indexOf(selected) + 1} of ${STEP_ORDER.length}: ${step.title}`}</p>
+
       <Stepper
         selected={selected}
         onSelect={(id) => {
           setFocusPr(null);
-          setSelected(id);
+          replay.select(id);
         }}
       />
 
       <div className="grid">
         <div>
           <h2>What happened</h2>
-          <Feed lines={step.feed} onCite={selected === "renew" ? cite : undefined} focusPr={selected === "work" ? focusPr : null} />
+          <Feed lines={step.feed.slice(0, replay.linesShown)} onCite={selected === "renew" ? cite : undefined} focusPr={selected === "work" ? focusPr : null} />
           <Legend />
         </div>
         <aside className="evidence" aria-label="Check it yourself">

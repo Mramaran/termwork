@@ -28,3 +28,6 @@ web/public/demo-output.json
 *.swp
 .DS_Store
 Thumbs.db
+
+# ── Vercel link and prebuilt output ──
+.vercel/

@@ -128,9 +128,24 @@ describe("buildRun", () => {
     expect(run.prs.map((p) => p.logIndex)).toEqual([1, 2, 3, 4, 5]);
     expect(run.model).toBe("renewal-model");
     expect(run.bigSpend).toMatchObject({ requestId: 0, proposalId: 1, state: "Rejected", rejectTxs: ["BR1", "BR2"] });
+    expect(run.bigSpends).toEqual([
+      expect.objectContaining({ prNumber: 4, requestId: 0, proposalId: 1, approved: false, state: "Rejected", voteTxs: ["BR1", "BR2"], requestTx: "RQ" }),
+    ]);
     expect(run.hire.voteTxs).toEqual(["HV1", "HV2"]);
     expect(run.termSecs).toBe(300);
     expect(run.budget.availableAtReport).toBe(Y(14));
+  });
+
+  it("an approved big spend records its per-request votes and approved=true; the PR stays requested in the work step", () => {
+    const base = input();
+    const run = buildRun({
+      ...base,
+      demo: { ...base.demo, txs: { ...base.demo.txs, "bigSpend.r0.vote1": { hash: "AV1" } } },
+      requests: base.requests.map((q) => ({ ...q, state: "Executed" as const })),
+      proposals: [{ id: 1, status: "Approved" }],
+    });
+    expect(run.bigSpends).toEqual([expect.objectContaining({ prNumber: 4, approved: true, state: "Approved", voteTxs: ["AV1"], recipient: "d.t", amount: Y(5) })]);
+    expect(run.prs[3]!.outcome).toBe("requested");
   });
 
   it('PR 5 keeps AI qualifies=true with outcome skipped and note "not a first-time contributor"', () => {

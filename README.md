@@ -36,6 +36,8 @@ Everything runs on NEAR **testnet**; the code refuses any other network. You nee
 
 `npm run -w scripts demo` does steps 2 to 9 in one process, with its own signer and agent loop, and ends with the fire. It takes about 12 minutes and about 30 NEAR of testnet faucet funds (up to 3 faucet accounts via `https://helper.nearprotocol.com`; the faucet rate-limits, and the script says so if it refuses). It deploys the committed wasm unless you built your own (step 3). The agent mode is `AGENT_MODE` from `.env`, else `live` when `NEARAI_API_KEY` is set, else `fixture`. The demo term is 5 minutes (`DEMO_TERM_SECS`).
 
+By default the agent works the made-up PRs in `fixtures/prs.json`. With `DEMO_SOURCE=github` it works the real merged PRs of `DEMO_REPO` (default `Mramaran/mission-dao-demo`) from the last `DEMO_DAYS` days (default 30), paying the accounts in their `near:` lines; set `GITHUB_TOKEN` for the GitHub search limit. The demo makes its own DAO, mandate and agent key, and puts `.termwork-state.json` and `.env` back when it ends, so a live deployment keeps its own agent. Then `npm run -w scripts export-run` turns the run into `web/public/run.json` for the replay.
+
 You see a `PASS` line for each assertion, in this order:
 
 1. The mandate has no access keys after setup.

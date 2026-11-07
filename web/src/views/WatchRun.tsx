@@ -131,7 +131,7 @@ export function WatchRun({ run }: { run: RunData }) {
           </dd>
           <dt>Employer</dt>
           <dd>
-            <a href={explorerAccount(run.dao)} target="_blank" rel="noreferrer">{run.dao}</a>, {run.hire.voteTxs.length} votes to hire
+            <a href={explorerAccount(run.dao)} target="_blank" rel="noreferrer">{run.dao}</a>, {run.hire.voteTxs.length} vote{run.hire.voteTxs.length === 1 ? "" : "s"} to hire
           </dd>
           <dt>Model</dt>
           <dd>{run.model} in a TEE on NEAR AI Cloud</dd>

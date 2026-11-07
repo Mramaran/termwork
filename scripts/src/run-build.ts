@@ -12,6 +12,24 @@ export interface DemoOutput {
   txs: Record<string, { hash: string; explorer?: string }>;
   termEnded: { explorer?: string; rpcError: string };
   agentAttempt: { result: string; rpcError?: string };
+  /** The pull requests the agent worked (real-PR runs). Fixture runs leave it out and export-run reads fixtures/prs.json. */
+  prFacts?: PullRequestFact[];
+}
+
+/** One big-spend request and the DAO's decision on it. */
+export interface BigSpend {
+  prNumber: number | null;
+  prUrl: string;
+  requestId: number;
+  proposalId: number;
+  amount: string;
+  recipient: string;
+  requestTx: string | null;
+  /** The council's votes, in order. When approved, the last one executed the payment. */
+  voteTxs: string[];
+  approved: boolean;
+  /** The DAO proposal status (Approved, Rejected), else the request state. */
+  state: string;
 }
 
 export interface AiAnswer {
@@ -52,6 +70,8 @@ export interface RunData {
   hire: { proposalId: number; proposeTx: string; voteTxs: string[] };
   prs: RunPr[];
   bigSpend: { requestId: number; proposalId: number; requestTx: string | null; rejectTxs: string[]; state: string };
+  /** Every big-spend request with the DAO's decision; bigSpend above is the first, kept for older readers. */
+  bigSpends: BigSpend[];
   renewal: { reportText: string; reportHash: string; logIndex: number; proposalTx: string | null; receiptHash: string; rejectTxs: string[] };
   budget: { total: string; spent: string; availableAtReport: string };
   end: {
@@ -165,7 +185,25 @@ export function buildRun(input: BuildInput): RunData {
     "the big-spend request",
   );
   const proposalId = need(bigReq.proposal_id, "the big-spend proposal id");
-  const proposal = input.proposals.find((p) => (p as { id?: number } | null)?.id === proposalId) as { status?: string } | undefined;
+  const proposalStatus = (id: number | null): string | undefined =>
+    (input.proposals.find((p) => (p as { id?: number } | null)?.id === id) as { status?: string } | undefined)?.status;
+  const proposal = { status: proposalStatus(proposalId) };
+  const bigSpends: BigSpend[] = requests.map((q) => {
+    const status = proposalStatus(q.proposal_id);
+    const perRequest = txsWithPrefix(demo, `bigSpend.r${q.id}.vote`);
+    return {
+      prNumber: prs.find((p) => p.url === q.evidence_url)?.number ?? null,
+      prUrl: q.evidence_url,
+      requestId: q.id,
+      proposalId: need(q.proposal_id, `the proposal id of request ${q.id}`),
+      amount: q.amount,
+      recipient: q.recipient,
+      requestTx: txLookup[`request:${q.id}`] ?? null,
+      voteTxs: perRequest.length > 0 ? perRequest : q.id === bigReq.id ? txsWithPrefix(demo, "bigSpend.reject") : [],
+      approved: status === "Approved" || q.state === "Executed",
+      state: status ?? q.state,
+    };
+  });
 
   const renewalEntry = need(
     log.find((e) => e.kind === "RenewalProposed"),
@@ -207,8 +245,9 @@ export function buildRun(input: BuildInput): RunData {
       proposalId,
       requestTx: txLookup[`request:${bigReq.id}`] ?? null,
       rejectTxs: txsWithPrefix(demo, "bigSpend.reject"),
-      state: proposal?.status ?? bigReq.state,
+      state: proposal.status ?? bigReq.state,
     },
+    bigSpends,
     renewal: {
       reportText,
       reportHash,

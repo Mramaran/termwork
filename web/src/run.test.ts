@@ -71,6 +71,31 @@ describe("steps", () => {
     const rec = S.fired.checks.filter((c) => c.kind === "recorded");
     expect(rec.length).toBeGreaterThan(0);
   });
+
+  it("vote step lists each approved big spend with its YES vote and payment", () => {
+    const half = (5n * 10n ** 23n).toString();
+    const run = {
+      ...FIXTURE,
+      bigSpends: [
+        { prNumber: 2, prUrl: "https://github.com/o/r/pull/2", requestId: 0, proposalId: 3, amount: half, recipient: "a.testnet", requestTx: "RQ0", voteTxs: ["V0"], approved: true, state: "Approved" },
+        { prNumber: 5, prUrl: "https://github.com/o/r/pull/5", requestId: 1, proposalId: 4, amount: half, recipient: "b.testnet", requestTx: null, voteTxs: ["V1"], approved: true, state: "Approved" },
+      ],
+    };
+    const v = steps(run).vote;
+    expect(texts(v.feed)).toEqual([
+      "PR #2 asked for 0.5 NEAR, over the 0.2 NEAR limit: DAO proposal #3",
+      "The council voted YES (1 vote): 0.5 NEAR paid to a.testnet",
+      "PR #5 asked for 0.5 NEAR, over the 0.2 NEAR limit: DAO proposal #4",
+      "The council voted YES (1 vote): 0.5 NEAR paid to b.testnet",
+    ]);
+    expect(v.checks.map((c) => c.label)).toEqual(["PR #2 request", "PR #2 vote 1 (YES, pays 0.5 NEAR)", "PR #5 request, see on explorer", "PR #5 vote 1 (YES, pays 0.5 NEAR)"]);
+    expect(v.checks[1]!.href).toBe(explorerTx("V0"));
+  });
+
+  it("the agent key check links the vote that passed the hire, even with one vote", () => {
+    const one = steps({ ...FIXTURE, hire: { ...FIXTURE.hire, voteTxs: ["ONLY"] } });
+    expect(one.hire.checks.find((c) => c.label === "Agent key created")!.href).toBe(explorerTx("ONLY"));
+  });
 });
 
 describe("confirmCheck", () => {

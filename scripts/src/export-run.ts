@@ -51,12 +51,15 @@ async function main(): Promise<void> {
   const receipts: Record<string, InferenceReceipt> = {};
   for (const h of new Set(Object.values(index))) receipts[h] = readJson<InferenceReceipt>("receipts", `${h}.json`);
 
-  // fixture placeholders (*.invalid) -> the demo accounts, matched by the name before the first dot, as demo.ts does
+  // A real-PR run saved the facts it worked from. A fixture run maps the placeholders (*.invalid) to the demo
+  // accounts, matched by the name before the first dot, as demo.ts does.
   const byPrefix = new Map(Object.entries(demo.accounts.contributors).map(([fa, id]) => [fa.split(".")[0]!, id]));
-  const prFacts = readJson<PullRequestFact[]>("fixtures", "prs.json").map((p) => ({
-    ...p,
-    nearAccount: p.nearAccount ? (byPrefix.get(p.nearAccount.split(".")[0]!) ?? null) : null,
-  }));
+  const prFacts =
+    demo.prFacts ??
+    readJson<PullRequestFact[]>("fixtures", "prs.json").map((p) => ({
+      ...p,
+      nearAccount: p.nearAccount ? (byPrefix.get(p.nearAccount.split(".")[0]!) ?? null) : null,
+    }));
 
   console.log(`reading ${mandateId} on testnet`);
   const [log, requests, mandate] = await Promise.all([
@@ -76,7 +79,7 @@ async function main(): Promise<void> {
 
   console.log(`wrote ${OUT_PATH} (${json.length} bytes)`);
   for (const p of run.prs) console.log(`  PR #${p.number} ${p.outcome.padEnd(9)} tx ${p.outcome === "skipped" ? "n/a (no transaction expected)" : (p.tx ?? "NULL")}`);
-  console.log(`  big-spend request tx: ${run.bigSpend.requestTx ?? "NULL"}`);
+  for (const b of run.bigSpends) console.log(`  big spend #${b.prNumber ?? "?"}: ${b.approved ? "approved" : b.state} (${b.voteTxs.length} votes), request tx ${b.requestTx ?? "NULL"}`);
   console.log(`  renewal proposal tx:  ${run.renewal.proposalTx ?? "NULL"}`);
   console.log(`  renewal receipt:      ${run.renewal.receiptHash}`);
 }

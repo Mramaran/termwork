@@ -41,7 +41,6 @@ type Range = { preset: "week" | "month" } | { preset: "custom"; from: string; to
 
 const FIT_REASON: Record<string, string> = {
   no_merged_in_range: "No pull requests were merged in this range.",
-  no_first_timers: "None of the merged pull requests are from first-time contributors, so there is nothing to reward.",
   not_found: "That repository could not be found.",
 };
 
@@ -256,7 +255,7 @@ export function AnalyseRepo() {
     }
   }
 
-  const poorFit = result && result.fit !== "ok" && (result.fit === "not_found" || result.rows.length === 0 || result.fit === "no_first_timers");
+  const poorFit = result && result.fit !== "ok" && (result.fit === "not_found" || result.rows.length === 0);
 
   return (
     <section className="tryl analyse" aria-labelledby="repo-h">
@@ -327,7 +326,7 @@ export function AnalyseRepo() {
           <>
             {poorFit && (
               <div className="rblock">
-                <p>{FIT_REASON[result.fit] ?? FIT_REASON.no_first_timers}</p>
+                <p>{FIT_REASON[result.fit] ?? FIT_REASON.no_merged_in_range}</p>
                 {result.suggestions.length > 0 && (
                   <>
                     <p className="small">Try one of these instead:</p>
@@ -349,7 +348,6 @@ export function AnalyseRepo() {
                     <tr>
                       <th scope="col">PR</th>
                       <th scope="col">Author</th>
-                      <th scope="col">First-time</th>
                       <th scope="col">Decision</th>
                       <th scope="col">Amount</th>
                       <th scope="col">Status</th>
@@ -364,7 +362,6 @@ export function AnalyseRepo() {
                           </a>
                         </td>
                         <td>{r.author}</td>
-                        <td>{r.firstTime ? "Yes" : "No"}</td>
                         <td>{r.reason}</td>
                         <td>{r.amountNear ? `${r.amountNear} NEAR` : "-"}</td>
                         <td>{statusCell(r)}</td>

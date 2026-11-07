@@ -30,11 +30,11 @@ describe("fixture decider", () => {
       if ("error" in d) throw new Error(d.error);
       return `${pr.number}:${d.qualifies}:${d.clause_id}:${d.amount_near}`;
     });
-    expect(outcome).toEqual(["1:true:2:0.2", "2:true:2:0.2", "3:true:2:0.2", "4:true:3:0.5", "5:false:1:0"]);
+    expect(outcome).toEqual(["1:false:1:0", "2:true:2:0.2", "3:true:2:0.2", "4:true:3:0.5", "5:true:2:0.2"]);
   });
 
   it("sends a PR over 200 lines to a vote even without a feature label", async () => {
-    const [pr] = await fixturesAdapter().listMerged();
+    const pr = (await fixturesAdapter().listMerged())[1];
     const d = parseDecision(fixtureDecision({ ...pr!, labels: ["bug"], changedLines: 201 }));
     expect(d).toMatchObject({ qualifies: true, clause_id: 3, amount_near: "0.5" });
   });

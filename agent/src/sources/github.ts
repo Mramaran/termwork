@@ -82,18 +82,23 @@ function githubClient(repo: string, fetchFn: FetchFn, token: string | undefined,
     return hit;
   }
 
-  async function factFor(number: number): Promise<PullRequestFact | null> {
+  /** `windowStart` (YYYY-MM-DD) turns on the per-window count of the author's earlier merged PRs. */
+  async function factFor(number: number, windowStart?: string): Promise<PullRequestFact | null> {
     const pr = await get<PullDetail>(`https://api.github.com/repos/${repo}/pulls/${number}`);
     if (!pr.user?.login || !pr.merged_at) return null;
     const mergedAt = pr.merged_at;
     const times = await mergedTimes(pr.user.login);
-    const firstTime = !times.some((t) => Date.parse(t) < Date.parse(mergedAt));
+    const merged = Date.parse(mergedAt);
+    const firstTime = !times.some((t) => Date.parse(t) < merged);
+    const start = windowStart ? Date.parse(`${windowStart}T00:00:00Z`) : NaN;
+    const window = Number.isNaN(start) ? {} : { earlierInWindow: times.filter((t) => Date.parse(t) >= start && Date.parse(t) < merged).length };
     return {
       url: pr.html_url,
       number: pr.number,
       title: pr.title,
       author: pr.user.login,
       firstTime,
+      ...window,
       changedLines: pr.additions + pr.deletions,
       labels: pr.labels.map((l) => l.name),
       mergedAt: pr.merged_at,
@@ -104,7 +109,7 @@ function githubClient(repo: string, fetchFn: FetchFn, token: string | undefined,
   return { get, factFor };
 }
 
-/** Public GitHub REST API adapter. "First-time" = the author has no earlier merged PR in the repo. */
+/** Public GitHub REST API adapter. "First-time" = the author has no earlier merged PR in the repo (shown, not a pay rule). */
 export function githubAdapter(
   repo: string = process.env.GITHUB_REPO ?? "",
   fetchFn: FetchFn = fetch,
@@ -154,7 +159,7 @@ export async function listMergedInRange(
   let overAuthorCap = false;
   for (const hit of search.items.slice(0, cap)) {
     try {
-      const fact = await gh.factFor(hit.number);
+      const fact = await gh.factFor(hit.number, from);
       if (fact) prs.push(fact);
     } catch (e) {
       if (e instanceof AuthorCapError) {
@@ -171,10 +176,10 @@ export async function listMergedInRange(
 }
 
 /** Facts for one merged PR, or null when it does not exist or is not merged. */
-export async function getMergedPr(repo: string, number: number, opts: ReadOpts = {}): Promise<PullRequestFact | null> {
+export async function getMergedPr(repo: string, number: number, opts: ReadOpts & { windowStart?: string } = {}): Promise<PullRequestFact | null> {
   const gh = githubClient(repo, opts.fetchFn ?? fetch, opts.token);
   try {
-    return await gh.factFor(number);
+    return await gh.factFor(number, opts.windowStart);
   } catch (e) {
     if (e instanceof GitHubError && e.status === 404) return null;
     throw e;

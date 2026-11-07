@@ -41,7 +41,6 @@ describe("TryLive", () => {
     expect((screen.getByLabelText("Changed lines") as HTMLInputElement).value).toBe("340");
     expect((screen.getByLabelText("NEAR account") as HTMLInputElement).value).toBe("dave.testnet");
     expect((screen.getByLabelText("Feature") as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText("First-time contributor") as HTMLInputElement).checked).toBe(true);
   });
 
   it("shows AI said, rules and result on 200", async () => {
@@ -58,7 +57,7 @@ describe("TryLive", () => {
     expect(screen.getByText("0xabc")).toBeTruthy();
     expect(screen.getByText(/Nothing is paid\. This calls the same model/)).toBeTruthy();
     const init = (f.mock.calls[0] as unknown as [string, { body: string }])[1];
-    expect(JSON.parse(init.body)).toMatchObject({ title: "docs: fix typo", changedLines: 12, firstTime: true });
+    expect(JSON.parse(init.body)).toEqual({ title: "fix: handle empty config file", changedLines: 24, feature: false, nearAccount: "alice.testnet" });
   });
 
   it("shows error and no badge on 502", async () => {

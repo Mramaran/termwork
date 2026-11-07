@@ -12,7 +12,7 @@ const near = (s: string): bigint => {
 export const DEMO_MISSION: Mission = {
   title: "Contributor Rewards Steward",
   clauses: [
-    { id: 1, text: "Reward first-time contributors whose pull requests were merged inside the review window the steward is asked to check.", max_amount: near("0.5").toString(), pays: true },
+    { id: 1, text: "Reward every valid pull request merged inside the review window the steward is asked to check. A trivial change (a typo, whitespace or formatting only, or an automated bot update) is not valid and earns nothing.", max_amount: near("0.5").toString(), pays: true },
     { id: 2, text: "Standard reward: 0.2 NEAR per qualifying pull request.", max_amount: near("0.2").toString(), pays: true },
     {
       id: 3,
@@ -20,9 +20,12 @@ export const DEMO_MISSION: Mission = {
       max_amount: near("0.5").toString(),
       pays: true,
     },
-    { id: 4, text: "Never pay a pull request twice, or one without a NEAR account given in its body.", max_amount: null, pays: false },
+    { id: 4, text: "Never pay a pull request twice, or one without a NEAR account given in its body. Only the first 2 merged pull requests from each contributor inside one review window are considered.", max_amount: null, pays: false },
   ],
 };
+
+/** Clause 4: only this many merged pull requests per contributor are considered in one review window. */
+export const MAX_PRS_PER_CONTRIBUTOR = 2;
 
 /** Spend threshold for the demo mandate: 0.2 NEAR in yoctoNEAR. */
 export const DEMO_SPEND_THRESHOLD = near("0.2").toString();

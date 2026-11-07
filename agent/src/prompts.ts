@@ -18,7 +18,6 @@ export function decisionMessages(m: MandateView, pr: PullRequestFact): ChatMessa
     url: pr.url,
     title: pr.title,
     author: pr.author,
-    first_time_contributor: pr.firstTime,
     changed_lines: pr.changedLines,
     labels: pr.labels,
     merged_at: pr.mergedAt,

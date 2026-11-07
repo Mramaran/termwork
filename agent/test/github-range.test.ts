@@ -85,7 +85,20 @@ describe("listMergedInRange", () => {
     }) as unknown as typeof fetch;
     const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: f });
     expect(r.prs.map((p) => p.firstTime)).toEqual([true, false, false]);
+    expect(r.prs.map((p) => p.earlierInWindow)).toEqual([0, 1, 2]);
     expect(urls.filter((u) => u.includes("author%3A"))).toHaveLength(1);
+  });
+
+  it("earlierInWindow counts only earlier merges on or after the window start", async () => {
+    const at = (d: string) => `${d}T00:00:00Z`;
+    const f = (async (url: string) => {
+      const u = String(url);
+      if (u.includes("author%3A")) return resp({ items: ["2026-09-30", "2026-10-03", "2026-10-05"].map((d) => ({ pull_request: { merged_at: at(d) } })) });
+      if (u.includes("/search/issues")) return resp({ total_count: 1, items: [{ number: 5 }] });
+      return resp(pull(5, "alice", null, at("2026-10-05")));
+    }) as unknown as typeof fetch;
+    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: f });
+    expect(r.prs[0]).toMatchObject({ firstTime: false, earlierInWindow: 1 });
   });
 
   it("rate limit throws GitHubError with retryAfter", async () => {
@@ -184,6 +197,14 @@ describe("listMergedInRange", () => {
     expect(err).toBeInstanceOf(GitHubError);
     expect(err.status).toBe(404);
     expect(err.retryAfterSec).toBeNull();
+  });
+});
+
+describe("getMergedPr window", () => {
+  it("sets earlierInWindow only when a windowStart is given", async () => {
+    const f = fakeFetch({ priorAt: "2026-10-01T00:00:00Z" }, []);
+    expect((await getMergedPr(REPO, 4, { fetchFn: f }))!.earlierInWindow).toBeUndefined();
+    expect((await getMergedPr(REPO, 4, { fetchFn: f, windowStart: "2026-10-01" }))!.earlierInWindow).toBe(1);
   });
 });
 

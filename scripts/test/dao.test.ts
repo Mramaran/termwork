@@ -18,7 +18,7 @@ describe("sputnikPolicy", () => {
 describe("DEMO_MISSION clause 1", () => {
   it("rewards merges inside the review window, with no 48 hours", () => {
     const text = DEMO_MISSION.clauses[0]!.text;
-    expect(text).toBe("Reward first-time contributors whose pull requests were merged inside the review window the steward is asked to check.");
+    expect(text).toBe("Reward every valid pull request merged inside the review window the steward is asked to check. A trivial change (a typo, whitespace or formatting only, or an automated bot update) is not valid and earns nothing.");
     expect(text).not.toContain("48 hours");
   });
 });

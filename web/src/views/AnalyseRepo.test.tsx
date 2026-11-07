@@ -138,7 +138,7 @@ describe("AnalyseRepo", () => {
   it("poor fit shows suggestions; clicking one re-runs with that repo", async () => {
     const calls = mockApi({
       analyse: [
-        () => ({ status: 200, body: analysis([], { fit: "no_first_timers", rows: [row({ firstTime: false, status: "skipped" })], suggestions: ["near/near-cli-rs"] }) }),
+        () => ({ status: 200, body: analysis([], { fit: "no_merged_in_range", rows: [], suggestions: ["near/near-cli-rs"] }) }),
         ok([]),
       ],
     });

@@ -203,7 +203,7 @@ async function main(): Promise<void> {
     if (mode === "fixture") {
       // exact counts are only guaranteed for the deterministic rule table
       must(requested.length === 1, "exactly 1 Requested entry (the big reward)");
-      must(log5.some((e) => e.kind === "Work" && (e.note ?? "").includes("not a first-time")), "1 skip logged (not a first-time contributor)");
+      must(log5.some((e) => e.kind === "Work" && (e.note ?? "").includes("trivial")), "1 skip logged (a trivial typo fix)");
     } else console.log(`  live decisions: ${paid.length} Paid, ${requested.length} Requested`);
     for (const e of paid) {
       const r = await balanceOf(e.recipient!);

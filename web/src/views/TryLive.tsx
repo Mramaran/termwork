@@ -23,14 +23,13 @@ interface Form {
   title: string;
   changedLines: string;
   feature: boolean;
-  firstTime: boolean;
   nearAccount: string;
 }
 
 const PRESETS: { name: string; form: Form }[] = [
-  { name: "Small first-time fix", form: { title: "docs: fix typo", changedLines: "12", feature: false, firstTime: true, nearAccount: "alice.testnet" } },
-  { name: "Big feature", form: { title: "feat: dark mode", changedLines: "340", feature: true, firstTime: true, nearAccount: "dave.testnet" } },
-  { name: "Repeat contributor", form: { title: "fix: flaky test", changedLines: "30", feature: false, firstTime: false, nearAccount: "erin.testnet" } },
+  { name: "Small fix", form: { title: "fix: handle empty config file", changedLines: "24", feature: false, nearAccount: "alice.testnet" } },
+  { name: "Big feature", form: { title: "feat: dark mode", changedLines: "340", feature: true, nearAccount: "dave.testnet" } },
+  { name: "Trivial typo", form: { title: "docs: fix typo", changedLines: "2", feature: false, nearAccount: "erin.testnet" } },
 ];
 
 /** The attested signing address: the response signature's, else the first model attestation's. */
@@ -77,7 +76,6 @@ export function TryLive() {
           title: form.title,
           changedLines: Number(form.changedLines),
           feature: form.feature,
-          firstTime: form.firstTime,
           ...(form.nearAccount ? { nearAccount: form.nearAccount } : {}),
         }),
       });
@@ -127,10 +125,6 @@ export function TryLive() {
         <label className="chk">
           <input type="checkbox" checked={form.feature} onChange={(e) => set("feature", e.target.checked)} />
           Feature
-        </label>
-        <label className="chk">
-          <input type="checkbox" checked={form.firstTime} onChange={(e) => set("firstTime", e.target.checked)} />
-          First-time contributor
         </label>
         <button type="submit" className="btn go" disabled={busy}>
           Ask the agent

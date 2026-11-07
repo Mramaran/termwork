@@ -21,9 +21,9 @@ export const limiter = makeLimiter(5, 200);
 
 const MAX_BODY = 2048;
 const NEAR_RE = /^(?=.{2,64}$)([a-z\d]+([-_][a-z\d]+)*\.)*[a-z\d]+([-_][a-z\d]+)*$/;
-const FIELDS = new Set(["title", "changedLines", "feature", "firstTime", "nearAccount"]);
+const FIELDS = new Set(["title", "changedLines", "feature", "nearAccount"]);
 
-type Input = { title: string; changedLines: number; feature: boolean; firstTime: boolean; nearAccount: string | null };
+type Input = { title: string; changedLines: number; feature: boolean; nearAccount: string | null };
 
 function parseInput(body: string): Input | { error: string; field: string } {
   let o: unknown;
@@ -40,14 +40,13 @@ function parseInput(body: string): Input | { error: string; field: string } {
   if (typeof r.changedLines !== "number" || !Number.isInteger(r.changedLines) || r.changedLines < 0 || r.changedLines > 100000)
     return { error: "changedLines must be an integer from 0 to 100000", field: "changedLines" };
   if (typeof r.feature !== "boolean") return { error: "feature must be true or false", field: "feature" };
-  if (typeof r.firstTime !== "boolean") return { error: "firstTime must be true or false", field: "firstTime" };
   let nearAccount: string | null = null;
   if (r.nearAccount !== undefined && r.nearAccount !== "") {
     if (typeof r.nearAccount !== "string" || !NEAR_RE.test(r.nearAccount))
       return { error: "nearAccount is not a valid NEAR account id", field: "nearAccount" };
     nearAccount = r.nearAccount;
   }
-  return { title: r.title, changedLines: r.changedLines, feature: r.feature, firstTime: r.firstTime, nearAccount };
+  return { title: r.title, changedLines: r.changedLines, feature: r.feature, nearAccount };
 }
 
 /**
@@ -64,7 +63,6 @@ function rulesFor(answer: Decision | { error: string }, input: Input): { rule: s
   if (stop("decision well-formed", d !== null && /^\d+(\.\d{1,24})?$/.test(d.amount_near))) return out;
   if (!d) return out;
   if (stop("model says it qualifies", d.qualifies)) return out;
-  if (stop("first-time contributor", input.firstTime)) return out;
   if (stop("has NEAR account", input.nearAccount !== null)) return out;
   const clause = DEMO_MISSION.clauses.find((c) => c.id === d.clause_id);
   const amount = BigInt(nearToYocto(d.amount_near));
@@ -105,7 +103,7 @@ async function run(req: HandleReq, deps: DecideDeps): Promise<HandleRes> {
     number: 1,
     title: input.title,
     author: "playground",
-    firstTime: input.firstTime,
+    firstTime: true,
     changedLines: input.changedLines,
     labels: input.feature ? ["feature"] : [],
     mergedAt: new Date(deps.now()).toISOString(),

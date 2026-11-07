@@ -119,7 +119,7 @@ async function run(req: HandleReq, deps: PayDeps): Promise<HandleRes> {
 
   let pr: Awaited<ReturnType<typeof getMergedPr>>;
   try {
-    pr = await deps.getMergedPr(repo, number, { token: c.githubToken });
+    pr = await deps.getMergedPr(repo, number, { token: c.githubToken, windowStart: range.from });
   } catch (e) {
     if (e instanceof GitHubError && (e.retryAfterSec !== null || e.status === 429))
       return { status: 429, json: { error: "GitHub rate limit reached, try again shortly.", retryAfterSec: e.retryAfterSec ?? 60 } };

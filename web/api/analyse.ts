@@ -1,9 +1,9 @@
-import { testnetRpcUrl, type LogEntry, type MandateView, type SpendRequest } from "@termwork/shared";
+import { MAX_PRS_PER_CONTRIBUTOR, testnetRpcUrl, type LogEntry, type MandateView, type SpendRequest } from "@termwork/shared";
 import { complete } from "../../agent/src/nearai";
 import { decisionMessages } from "../../agent/src/prompts";
 import { GitHubError, listMergedInRange } from "../../agent/src/sources/github";
 import type { PullRequestFact } from "../../agent/src/sources/types";
-import { parseDecision, validate } from "../../agent/src/validate";
+import { OVER_LIMIT, parseDecision, validate } from "../../agent/src/validate";
 import { nodeHandler, scrub, type HandleReq, type HandleRes } from "./_lib/http";
 import { parseRange, parseRepo, payableRepos } from "./_lib/input";
 import { makeLimiter } from "./_lib/limits";
@@ -85,7 +85,7 @@ const baseRow = (p: PullRequestFact): Omit<Row, "status" | "amountNear" | "reaso
   nearAccount: p.nearAccount,
 });
 
-const NOT_FIRST = "not a first-time contributor";
+const overLimit = (p: PullRequestFact) => (p.earlierInWindow ?? 0) >= MAX_PRS_PER_CONTRIBUTOR;
 
 /** Payable repo: statuses come from the chain only, no model call. */
 function payableRow(p: PullRequestFact, paid: Map<string, LogEntry>, pending: Map<string, SpendRequest>): Row {
@@ -110,7 +110,7 @@ function payableRow(p: PullRequestFact, paid: Map<string, LogEntry>, pending: Ma
       receiptHash: req.receipt_hash,
       proposalId: req.proposal_id,
     };
-  if (!p.firstTime) return { ...b, status: "skipped", amountNear: null, reason: NOT_FIRST, receiptHash: null, proposalId: null };
+  if (overLimit(p)) return { ...b, status: "skipped", amountNear: null, reason: OVER_LIMIT, receiptHash: null, proposalId: null };
   if (!p.nearAccount)
     return { ...b, status: "unclaimed", amountNear: null, reason: "no NEAR account in the pull request", receiptHash: null, proposalId: null };
   return { ...b, status: "ready", amountNear: null, reason: "ready to pay", receiptHash: null, proposalId: null };
@@ -119,7 +119,7 @@ function payableRow(p: PullRequestFact, paid: Map<string, LogEntry>, pending: Ma
 /** Non-payable repo: the model decides, the fixed rules gate it, nothing is paid. */
 async function decidedRow(p: PullRequestFact, mandate: MandateView, deps: AnalyseDeps, stats: { calls: number; failed: number }): Promise<Row> {
   const b = baseRow(p);
-  if (!p.firstTime) return { ...b, status: "skipped", amountNear: null, reason: NOT_FIRST, receiptHash: null, proposalId: null };
+  if (overLimit(p)) return { ...b, status: "skipped", amountNear: null, reason: OVER_LIMIT, receiptHash: null, proposalId: null };
   let out: Awaited<ReturnType<typeof complete>>;
   stats.calls++;
   try {
@@ -202,8 +202,7 @@ async function run(req: HandleReq, deps: AnalyseDeps): Promise<HandleRes> {
   } catch {
     return { status: 502, json: { error: "The chain could not be read. Try again in a minute." } };
   }
-  const fit = rows.some((x) => x.firstTime) ? "ok" : "no_first_timers";
-  return { status: 200, json: { ...head, fit, rows } };
+  return { status: 200, json: { ...head, fit: "ok", rows } };
 }
 
 export async function handle(req: HandleReq, deps: AnalyseDeps): Promise<HandleRes> {

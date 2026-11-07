@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Logo } from "./Logo";
 import { loadRun, type RunData } from "./run";
 import { AnalyseRepo } from "./views/AnalyseRepo";
 import { LiveDao } from "./views/LiveDao";
@@ -75,7 +76,10 @@ export function App() {
     <div className="wrap">
       <header>
         <div>
-          <h1>Termwork</h1>
+          <h1 className="brand">
+            <Logo />
+            Termwork
+          </h1>
           <p className="tag">The AI agent that has to earn its next term.</p>
           <p className="sub">Hired by vote. Renewed on evidence. Fired on-chain.</p>
         </div>

@@ -56,7 +56,24 @@ function yoctoToNear(y: string): string {
   return frac ? `${whole}.${frac}` : whole;
 }
 
-const errText = (e: unknown, secrets: string[]): string =>
+const MAX_RATIONALE_BYTES = 2048;
+const RPC_CHECK_PREFIX = "recipient check failed (rpc)";
+
+/** Cuts text to at most maxBytes of UTF-8, never splitting a character. */
+function truncateUtf8(s: string, maxBytes: number): string {
+  if (Buffer.byteLength(s, "utf8") <= maxBytes) return s;
+  let out = "";
+  let bytes = 0;
+  for (const ch of s) {
+    const n = Buffer.byteLength(ch, "utf8");
+    if (bytes + n > maxBytes) break;
+    out += ch;
+    bytes += n;
+  }
+  return out;
+}
+
+const errText =(e: unknown, secrets: string[]): string =>
   (scrub({ status: 0, json: { m: e instanceof Error ? e.message : String(e) } }, secrets).json as { m: string }).m;
 
 /** Maps a failed send to a response. Contract panics arrive inside the error message. */
@@ -139,7 +156,14 @@ async function run(req: HandleReq, deps: PayDeps): Promise<HandleRes> {
   }
   // Recipient, amount and clause come only from the PR facts and the gated model decision.
   const action = await validate(parseDecision(out.text), pr, mandate, handled, deps.accountExists);
-  if (action.kind === "log") return { status: 200, json: { kind: "skip", reason: action.summary } };
+  if (action.kind === "log") {
+    // A failed account lookup is a transient chain error, not a decision about the PR.
+    if (action.summary.startsWith(RPC_CHECK_PREFIX)) {
+      console.error(`pay: ${errText(action.summary, deps.secrets ?? [])} for ${pr.url}`);
+      return { status: 502, json: { error: "Could not check the recipient account on NEAR. Try again." } };
+    }
+    return { status: 200, json: { kind: "skip", reason: action.summary } };
+  }
 
   const amountNear = yoctoToNear(action.amountYocto);
   const args = {
@@ -152,7 +176,7 @@ async function run(req: HandleReq, deps: PayDeps): Promise<HandleRes> {
   let txHash: string;
   try {
     const ops = deps.ops();
-    txHash = (action.kind === "spend" ? await ops.spend(args) : await ops.request_spend({ ...args, rationale: action.rationale })).txHash;
+    txHash = (action.kind === "spend" ? await ops.spend(args) : await ops.request_spend({ ...args, rationale: truncateUtf8(action.rationale, MAX_RATIONALE_BYTES) })).txHash;
   } catch (e) {
     return sendFailure(e, deps.secrets ?? []);
   }
@@ -161,7 +185,7 @@ async function run(req: HandleReq, deps: PayDeps): Promise<HandleRes> {
   let labelled = false;
   if (c.labelToken) {
     try {
-      await deps.labelPaid({ repo, number, amountNear, recipient: action.recipient, txHash, receipt: out.receipt }, { token: c.labelToken });
+      await deps.labelPaid({ repo, number, amountNear, recipient: action.recipient, txHash, receipt: out.receipt, receiptHash: out.hash }, { token: c.labelToken });
       labelled = true;
     } catch (e) {
       console.error(`pay: labelling ${pr.url} failed: ${errText(e, deps.secrets ?? [])}`);

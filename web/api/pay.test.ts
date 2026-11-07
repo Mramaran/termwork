@@ -178,7 +178,7 @@ describe("/api/pay", () => {
     expect(d.calls.spend).toEqual([
       { recipient: "alice.testnet", amount: "200000000000000000000000", clause_id: 2, evidence_url: PR_URL, receipt_hash: "rh1" },
     ]);
-    expect(d.calls.label).toEqual([{ repo: "o/r", number: 7, amountNear: "0.2", recipient: "alice.testnet", txHash: "TX1", receipt: RECEIPT }]);
+    expect(d.calls.label).toEqual([{ repo: "o/r", number: 7, amountNear: "0.2", recipient: "alice.testnet", txHash: "TX1", receipt: RECEIPT, receiptHash: "rh1" }]);
     expect(body(r)).toEqual({ kind: "spend", txHash: "TX1", amountNear: "0.2", recipient: "alice.testnet", labelled: true });
   });
 
@@ -207,6 +207,38 @@ describe("/api/pay", () => {
     ]);
     expect(d.calls.label).toHaveLength(0);
     expect(body(r)).toEqual({ kind: "request", txHash: "TX2", amountNear: "0.5", recipient: "alice.testnet" });
+  });
+
+  it("a 5000-character rationale is cut to 2048 bytes", async () => {
+    const text = JSON.stringify({ qualifies: true, clause_id: 3, amount_near: "0.5", rationale: "a".repeat(5000) });
+    const d = mk({ decisionText: text, pr: fact({ labels: ["feature"] }) });
+    expect((await handle(post(), d)).status).toBe(200);
+    expect((d.calls.request[0] as { rationale: string }).rationale).toBe("a".repeat(2048));
+  });
+
+  it("a long multi-byte rationale is cut without splitting a character", async () => {
+    // "x" (1 byte) then 2500 two-byte characters: 1 + 1023 * 2 = 2047 bytes is the longest whole fit.
+    const text = JSON.stringify({ qualifies: true, clause_id: 3, amount_near: "0.5", rationale: "x" + "é".repeat(2500) });
+    const d = mk({ decisionText: text, pr: fact({ labels: ["feature"] }) });
+    expect((await handle(post(), d)).status).toBe(200);
+    const sent = (d.calls.request[0] as { rationale: string }).rationale;
+    expect(sent).toBe("x" + "é".repeat(1023));
+    expect(Buffer.byteLength(sent, "utf8")).toBe(2047);
+  });
+
+  it("a NEAR RPC failure while checking the recipient gives 502, not a skip", async () => {
+    const d = mk({
+      accountExists: async () => {
+        throw new Error("RPC HTTP 503 sekret-key");
+      },
+    });
+    const r = await handle(post(), d);
+    expect(r.status).toBe(502);
+    expect(body(r)).toEqual({ error: "Could not check the recipient account on NEAR. Try again." });
+    expect(noOps(d)).toBe(true);
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toContain("[redacted]");
+    expect(logged[0]).not.toContain("sekret-key");
   });
 
   it("recipient account missing gives a skip and no payment", async () => {

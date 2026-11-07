@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { explorerAccount, explorerTx } from "./chain";
-import { confirmCheck, reportHashMatches, steps, type CheckItem, type FeedLine } from "./run";
+import { confirmCheck, reportedBudgetLeft, reportHashMatches, steps, type CheckItem, type FeedLine } from "./run";
 import { FIXTURE } from "./run.fixture";
 
 const S = steps(FIXTURE);
@@ -90,6 +90,27 @@ describe("steps", () => {
     ]);
     expect(v.checks.map((c) => c.label)).toEqual(["PR #2 request", "PR #2 vote 1 (YES, pays 0.5 NEAR)", "PR #5 request, see on explorer", "PR #5 vote 1 (YES, pays 0.5 NEAR)"]);
     expect(v.checks[1]!.href).toBe(explorerTx("V0"));
+  });
+
+  it("reads the report's budget left in yoctoNEAR or NEAR", () => {
+    expect(reportedBudgetLeft("Budget left\n1800000000000000000000000 yoctoNEAR\n")).toBe(18n * 10n ** 23n);
+    expect(reportedBudgetLeft("Budget left\n- 3.4 NEAR available")).toBe(34n * 10n ** 23n);
+    expect(reportedBudgetLeft("no such section")).toBeNull();
+  });
+
+  it("flags a report whose budget left disagrees with the contract, and stays quiet when it agrees", () => {
+    const at = (reportText: string) => texts(steps({ ...FIXTURE, renewal: { ...FIXTURE.renewal, reportText }, budget: { ...FIXTURE.budget, availableAtReport: (34n * 10n ** 23n).toString() } }).renew.feed);
+    expect(at("Paid\n...\nBudget left\n1800000000000000000000000 yoctoNEAR\n")).toContain(
+      "The agent's report says 1.8 NEAR is left, but the contract shows 3.4 NEAR available at report time. The contract's figures above are authoritative.",
+    );
+    expect(at("Budget left\n3400000000000000000000000 yoctoNEAR\n").some((t) => t.includes("is left, but the contract"))).toBe(false);
+  });
+
+  it("work feed hides the live site's paid labels and keeps the others", () => {
+    const pr = { ...FIXTURE.prs[0]!, changedLines: 1, labels: ["feature", "💰 paid 0.2 NEAR"] };
+    const line = texts(steps({ ...FIXTURE, prs: [pr] }).work.feed)[0]!;
+    expect(line).toContain("1 changed line, labels: feature,");
+    expect(line).not.toContain("💰");
   });
 
   it("the agent key check links the vote that passed the hire, even with one vote", () => {

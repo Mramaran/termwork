@@ -125,10 +125,23 @@ function hireStep(run: RunData): Step {
   return { title: "Hire", feed, checks };
 }
 
+/** PR labels minus the "💰 paid" labels the live site adds after paying, which a recorded run may have read. */
+const shownLabels = (pr: RunPr): string[] => pr.labels.filter((l) => !/^💰 paid\b/.test(l));
+
+/** The "Budget left" figure in the agent's report, in yoctoNEAR (whole yocto, or a NEAR decimal); null if absent. */
+export function reportedBudgetLeft(report: string): bigint | null {
+  const m = /Budget left[^\n\d]*\n?\s*(?:[-*]\s*)?([\d.]+)\s*(yocto)?/i.exec(report);
+  if (!m) return null;
+  const [num, yocto] = [m[1]!, !!m[2]];
+  if (yocto || /^\d{19,}$/.test(num)) return /^\d+$/.test(num) ? BigInt(num) : null;
+  const [w = "0", f = ""] = num.split(".");
+  return BigInt(w) * 10n ** 24n + BigInt(f.padEnd(24, "0").slice(0, 24) || "0");
+}
+
 function prLines(run: RunData, pr: RunPr): FeedLine[] {
   const lines: FeedLine[] = [
     {
-      text: `PR #${pr.number} "${pr.title}": ${pr.changedLines} changed lines${pr.labels.length ? `, labels: ${pr.labels.join(", ")}` : ""}, NEAR account: ${pr.nearAccount ?? "none"}`,
+      text: `PR #${pr.number} "${pr.title}": ${pr.changedLines} changed line${pr.changedLines === 1 ? "" : "s"}${shownLabels(pr).length ? `, labels: ${shownLabels(pr).join(", ")}` : ""}, NEAR account: ${pr.nearAccount ?? "none"}`,
       tone: "info",
     },
   ];
@@ -210,6 +223,13 @@ function renewStep(run: RunData): Step {
   if (/initial budget/i.test(run.renewal.reportText))
     feed.push({
       text: `The agent's report states amounts in yoctoNEAR and calls the available ${available} NEAR its 'initial budget'. The contract's figures above are authoritative.`,
+      tone: "warn",
+    });
+  // Any report whose "Budget left" disagrees with the contract is flagged; the AI writes the report, the contract keeps the books.
+  const claimed = reportedBudgetLeft(run.renewal.reportText);
+  if (claimed !== null && claimed !== BigInt(run.budget.availableAtReport))
+    feed.push({
+      text: `The agent's report says ${near(claimed.toString())} NEAR is left, but the contract shows ${available} NEAR available at report time. The contract's figures above are authoritative.`,
       tone: "warn",
     });
   const checks: CheckItem[] = [

@@ -1,15 +1,15 @@
 {
-  "recordedAt": "2026-11-06T16:40:18.334Z",
+  "recordedAt": "2026-11-07T14:46:13.533Z",
   "network": "testnet",
-  "mandate": "steward.termwork-m2-fba0b2.testnet",
-  "dao": "twfba0b2.sputnikv2.testnet",
+  "mandate": "steward.termwork-m2-4b411f.testnet",
+  "dao": "tw4b411f.sputnikv2.testnet",
   "model": "Qwen/Qwen3.8-27B",
   "mission": {
     "title": "Contributor Rewards Steward",
     "clauses": [
       {
         "id": 1,
-        "text": "Reward first-time contributors whose pull requests are merged into the repo, within 48 hours of the merge.",
+        "text": "Reward every valid pull request merged inside the review window the steward is asked to check. A trivial change (a typo, whitespace or formatting only, or an automated bot update) is not valid and earns nothing.",
         "max_amount": "500000000000000000000000",
         "pays": true
       },
@@ -35,174 +35,249 @@
   },
   "spendThreshold": "200000000000000000000000",
   "maxRequest": "500000000000000000000000",
-  "termSecs": 300,
+  "termSecs": 420,
   "hire": {
     "proposalId": 0,
-    "proposeTx": "9YMqHeQZi395zDsKEhroY94PLR8JgkRwmptMUHUppVpG",
+    "proposeTx": "86p3vf78MKPqhp5j2UnhQVokEguwc6GSxofjLt4XY41C",
     "voteTxs": [
-      "3QXrvFx9z3Eg6YAjT8xTUf7TdV6JiL8PY8EJryBgNuzK",
-      "CM6DKWRTaAgddihJLkxsDsuYKoyTEfcsftEkkxvX8Yqz"
+      "E8BhkBexEpsd3kShbMSjNEQjWmTGvfQ5jCK3itUwHNti",
+      "12THF4McgH6so9Vo7pkszK1nt64hMHYof6aARytgandq"
     ]
   },
   "prs": [
     {
-      "url": "https://github.com/termwork/demo/pull/1",
+      "url": "https://github.com/Mramaran/mission-dao-demo/pull/1",
       "number": 1,
-      "title": "Fix typo in README",
+      "title": "fix: reject negative amounts in nearToYocto",
       "firstTime": true,
-      "changedLines": 12,
+      "changedLines": 1,
       "labels": [
-        "docs"
+        "💰 paid 0.2 NEAR"
       ],
-      "nearAccount": "alice-dev.termwork-m3-fba0b2.testnet",
+      "nearAccount": "mramaran-dev.testnet",
       "ai": {
         "qualifies": true,
-        "clause_id": 1,
+        "clause_id": 2,
         "amount_near": "0.2",
-        "rationale": "The pull request meets the criteria for Clause 1 as it is from a first-time contributor and has a valid NEAR account. The reward amount is set to 0.2 NEAR according to the standard rate in Clause 2."
+        "rationale": "The pull request fixes a bug by rejecting negative amounts, which is a code change adding behavior and is therefore not trivial. It qualifies for the standard reward under clause 2."
       },
-      "receiptHash": "e3ad67f3ab09ff5aab0806bf34ca107a70ab1df6b925314c8a617d89de479524",
+      "receiptHash": "7d47fd279d0212f589d7b47d17da66c2fa39545125875825322aeff48e23b506",
       "verified": true,
       "outcome": "paid",
-      "outcomeNote": "paid 0.2 NEAR under clause 1",
+      "outcomeNote": "paid 0.2 NEAR under clause 2",
       "amount": "200000000000000000000000",
-      "tx": "GkMBHRmPJEo7ouWmqsffTVKVrziyfyV1Nizm2JD9d5Wi",
+      "tx": "2nPt5rL4bQS2YCZBvB86rTVyjj5g5ubLfuVfGQybAJ2P",
       "logIndex": 1
     },
     {
-      "url": "https://github.com/termwork/demo/pull/2",
+      "url": "https://github.com/Mramaran/mission-dao-demo/pull/2",
       "number": 2,
-      "title": "Add missing error message",
-      "firstTime": true,
-      "changedLines": 35,
+      "title": "feat: add formatNear and parseNear display helpers",
+      "firstTime": false,
+      "changedLines": 26,
       "labels": [
-        "bug"
+        "feature",
+        "💰 paid 0.5 NEAR"
       ],
-      "nearAccount": "bob-codes.termwork-m3-fba0b2.testnet",
-      "ai": {
-        "qualifies": true,
-        "clause_id": 2,
-        "amount_near": "0.2",
-        "rationale": "The pull request is merged, the author is a first-time contributor, and the PR has a valid NEAR account, but it does not meet the criteria for the larger reward (no 'feature' label and <200 lines), so it qualifies for the standard reward under Clause 2."
-      },
-      "receiptHash": "b207f549bf9ff980247f47d7285e6a45cbc07c9c6b8503a87af608aee16aaecf",
-      "verified": true,
-      "outcome": "paid",
-      "outcomeNote": "paid 0.2 NEAR under clause 2",
-      "amount": "200000000000000000000000",
-      "tx": "7KsGA9PNjAMG4o3zdc7dBvNETbZzDJpBSDtBgJ6Rphdv",
-      "logIndex": 2
-    },
-    {
-      "url": "https://github.com/termwork/demo/pull/3",
-      "number": 3,
-      "title": "Clarify install steps",
-      "firstTime": true,
-      "changedLines": 48,
-      "labels": [
-        "docs"
-      ],
-      "nearAccount": "carol-w.termwork-m3-fba0b2.testnet",
-      "ai": {
-        "qualifies": true,
-        "clause_id": 2,
-        "amount_near": "0.2",
-        "rationale": "The pull request is a standard contribution (48 lines, docs label) by a contributor with a valid NEAR account. Clause 2 applies for the standard reward of 0.2 NEAR, as it does not meet the criteria for the larger reward in Clause 3."
-      },
-      "receiptHash": "e4605f893b0ab7b3e714e1a7dffdacda69759dc96a6d3e3db27c986959a46fbc",
-      "verified": true,
-      "outcome": "paid",
-      "outcomeNote": "paid 0.2 NEAR under clause 2",
-      "amount": "200000000000000000000000",
-      "tx": "BP72wtzVVk2A9wr2rFLaRaoLY4XyE8svrYZxrzUn4NQu",
-      "logIndex": 3
-    },
-    {
-      "url": "https://github.com/termwork/demo/pull/4",
-      "number": 4,
-      "title": "Add CSV export feature",
-      "firstTime": true,
-      "changedLines": 340,
-      "labels": [
-        "feature"
-      ],
-      "nearAccount": "dave-builds.termwork-m3-fba0b2.testnet",
+      "nearAccount": "mramaran-dev.testnet",
       "ai": {
         "qualifies": true,
         "clause_id": 3,
         "amount_near": "0.5",
-        "rationale": "The pull request has a 'feature' label and 340 changed lines, exceeding the 200-line threshold defined in clause 3 for a larger reward. Although the contributor is a first-time contributor, the specific criteria for clause 3 regarding size or feature labels takes precedence for the reward amount calculation in this context."
+        "rationale": "The pull request is labeled 'feature' and adds new display helpers, which qualifies it for the larger reward tier under clause 3. The presence of a NEAR account in the body satisfies the payment requirements."
       },
-      "receiptHash": "52081c1123b30ff2a67b3cdf3cce3c0d405b9b90b017bbc285cecdf419b9d5ac",
+      "receiptHash": "69594b0dff24b50c1a85ebdd5c515a39004bdd49cb538f970b0b66170f7ff6e5",
       "verified": true,
       "outcome": "requested",
       "outcomeNote": "asked the DAO for 0.5 NEAR (over the spend threshold)",
       "amount": "500000000000000000000000",
-      "tx": "5qYz2ZJFcdMbBGL2D788LfwcrTwhHtPFsQ1uxaL7nnjn",
-      "logIndex": 4
+      "tx": "B8sgpmfJuaiAxaTQsqqBZWpFmpzN2QEu7gumU2a28Swb",
+      "logIndex": 2
     },
     {
-      "url": "https://github.com/termwork/demo/pull/5",
-      "number": 5,
-      "title": "Refactor config loader",
+      "url": "https://github.com/Mramaran/mission-dao-demo/pull/3",
+      "number": 3,
+      "title": "docs: fix README heading formatting",
       "firstTime": false,
-      "changedLines": 60,
+      "changedLines": 2,
+      "labels": [],
+      "nearAccount": "mramaran-dev.testnet",
+      "ai": {
+        "qualifies": false,
+        "clause_id": 1,
+        "amount_near": "0",
+        "rationale": "The pull request is a formatting-only change to the README, which is explicitly defined as trivial and therefore not valid for reward under clause 1."
+      },
+      "receiptHash": "80884bce138304c5d47664fc7e185074802bf6478136fa51f7ce53d64e6efdc2",
+      "verified": true,
+      "outcome": "skipped",
+      "outcomeNote": "The pull request is a formatting-only change to the README, which is explicitly defined as trivial and therefore not valid for reward under clause 1.",
+      "amount": null,
+      "tx": null,
+      "logIndex": 3
+    },
+    {
+      "url": "https://github.com/Mramaran/mission-dao-demo/pull/4",
+      "number": 4,
+      "title": "fix: reject invalid input in yoctoToNear",
+      "firstTime": true,
+      "changedLines": 4,
       "labels": [
-        "refactor"
+        "💰 paid 0.2 NEAR"
       ],
-      "nearAccount": "alice-dev.termwork-m3-fba0b2.testnet",
+      "nearAccount": "adhish.testnet",
       "ai": {
         "qualifies": true,
         "clause_id": 2,
         "amount_near": "0.2",
-        "rationale": "The pull request qualifies for the standard reward under Clause 2 because it has a valid NEAR account, has not been paid before, and does not meet the criteria for the larger reward in Clause 3 (lacks 'feature' label and has fewer than 200 changed lines)."
+        "rationale": "The pull request fixes a bug in code, which is not considered trivial, and has 4 changed lines without a 'feature' label, qualifying for the standard reward."
       },
-      "receiptHash": "2aa248389fed041f932bb64b3dc3523846e962afcce4beca774d335f8d5a4353",
+      "receiptHash": "7b07a9d1e02717fb70c6b15d680edd292e5a255940eddfe8690c631df94f73cc",
+      "verified": true,
+      "outcome": "paid",
+      "outcomeNote": "paid 0.2 NEAR under clause 2",
+      "amount": "200000000000000000000000",
+      "tx": "3H6RpxoZPNgdKTvacm6tSrEhbyjfpgYCS6uYcKmZZU8i",
+      "logIndex": 4
+    },
+    {
+      "url": "https://github.com/Mramaran/mission-dao-demo/pull/5",
+      "number": 5,
+      "title": "feat: add NEAR account id helpers",
+      "firstTime": true,
+      "changedLines": 23,
+      "labels": [
+        "feature",
+        "💰 paid 0.5 NEAR"
+      ],
+      "nearAccount": "maran-dev.testnet",
+      "ai": {
+        "qualifies": true,
+        "clause_id": 3,
+        "amount_near": "0.5",
+        "rationale": "The pull request is labeled 'feature' and is not trivial, qualifying for the larger reward tier. Clause 4 is satisfied as a NEAR account is provided and no prior payment is indicated."
+      },
+      "receiptHash": "269f9c653bf1f504f47f63799507c9cdf1d43c958eb7f44ab8b36113339be814",
+      "verified": true,
+      "outcome": "requested",
+      "outcomeNote": "asked the DAO for 0.5 NEAR (over the spend threshold)",
+      "amount": "500000000000000000000000",
+      "tx": "HcdEMdJa3CdQvVZhPy6Dhu9173rzkxFny8vFtDBi3f3C",
+      "logIndex": 5
+    },
+    {
+      "url": "https://github.com/Mramaran/mission-dao-demo/pull/6",
+      "number": 6,
+      "title": "docs: wrap a long line in the README",
+      "firstTime": false,
+      "changedLines": 3,
+      "labels": [],
+      "nearAccount": "maran-dev.testnet",
+      "ai": {
+        "qualifies": false,
+        "clause_id": 1,
+        "amount_near": "0",
+        "rationale": "The pull request is a formatting-only change (wrapping a long line in the README), which is explicitly defined as trivial and therefore not valid for reward under Clause 1."
+      },
+      "receiptHash": "367c15606a5a97bc85bebab5386aa762ef38da321c3f20a039cfcaa478cdebc3",
       "verified": true,
       "outcome": "skipped",
-      "outcomeNote": "not a first-time contributor",
+      "outcomeNote": "The pull request is a formatting-only change (wrapping a long line in the README), which is explicitly defined as trivial and therefore not valid for reward under Clause 1.",
       "amount": null,
       "tx": null,
-      "logIndex": 5
+      "logIndex": 6
+    },
+    {
+      "url": "https://github.com/Mramaran/mission-dao-demo/pull/7",
+      "number": 7,
+      "title": "test: add unit tests for the NEAR conversions",
+      "firstTime": true,
+      "changedLines": 28,
+      "labels": [
+        "💰 paid 0.2 NEAR"
+      ],
+      "nearAccount": "ashwins.testnet",
+      "ai": {
+        "qualifies": true,
+        "clause_id": 2,
+        "amount_near": "0.2",
+        "rationale": "The pull request adds unit tests, which is a valid contribution that is not trivial, and it has a NEAR account provided. It does not meet the criteria for a larger PR (no feature label, <200 lines), so it qualifies for the standard reward under clause 2."
+      },
+      "receiptHash": "088b868a34924ebec2ff00a2afb8ede576593257dcd15f22377a6efa4f15da0b",
+      "verified": true,
+      "outcome": "paid",
+      "outcomeNote": "paid 0.2 NEAR under clause 2",
+      "amount": "200000000000000000000000",
+      "tx": "6u9TkKxaiGuRdi5yKichwdtqAjqgmGScLtsNsZGGTgud",
+      "logIndex": 7
     }
   ],
   "bigSpend": {
     "requestId": 0,
     "proposalId": 1,
-    "requestTx": "5qYz2ZJFcdMbBGL2D788LfwcrTwhHtPFsQ1uxaL7nnjn",
-    "rejectTxs": [
-      "7fiuGGEEH3VokACsx4eEVXXj5ETTC1GvvNnikTqwpQxU",
-      "43eyeVAaF1thcypFmUraCW2jYMCcemxnqYKNpJZA3E1N"
-    ],
-    "state": "Rejected"
+    "requestTx": "B8sgpmfJuaiAxaTQsqqBZWpFmpzN2QEu7gumU2a28Swb",
+    "rejectTxs": [],
+    "state": "Approved"
   },
+  "bigSpends": [
+    {
+      "prNumber": 2,
+      "prUrl": "https://github.com/Mramaran/mission-dao-demo/pull/2",
+      "requestId": 0,
+      "proposalId": 1,
+      "amount": "500000000000000000000000",
+      "recipient": "mramaran-dev.testnet",
+      "requestTx": "B8sgpmfJuaiAxaTQsqqBZWpFmpzN2QEu7gumU2a28Swb",
+      "voteTxs": [
+        "63h6zRjv211nT3a6Zu7XYNM9B9QrfUCQs3LmPRZaBR1Z",
+        "Hj5eLVXdv533BaUNmojzvvmSB8hg1wNpdiTisbnvdZtB"
+      ],
+      "approved": true,
+      "state": "Approved"
+    },
+    {
+      "prNumber": 5,
+      "prUrl": "https://github.com/Mramaran/mission-dao-demo/pull/5",
+      "requestId": 1,
+      "proposalId": 2,
+      "amount": "500000000000000000000000",
+      "recipient": "maran-dev.testnet",
+      "requestTx": "HcdEMdJa3CdQvVZhPy6Dhu9173rzkxFny8vFtDBi3f3C",
+      "voteTxs": [
+        "Bii5Td1wb5E4ssZypP7rGEXpLzg77MwbhnBNZqbZfB5N",
+        "9HPRJY8FMexFrGJJA6W2UNqfdAD5PMvZZen3vhgrupPU"
+      ],
+      "approved": true,
+      "state": "Approved"
+    }
+  ],
   "renewal": {
-    "reportText": "Paid\n[#1] Paid 200,000,000,000,000,000,000,000 yoctoNEAR to alice-dev.termwork-m3-fba0b2.testnet.\n[#2] Paid 200,000,000,000,000,000,000,000 yoctoNEAR to bob-codes.termwork-m3-fba0b2.testnet.\n[#3] Paid 200,000,000,000,000,000,000,000 yoctoNEAR to carol-w.termwork-m3-fba0b2.testnet.\n\nSent to vote\n[#4] Requested 500,000,000,000,000,000,000,000 yoctoNEAR for dave-builds.termwork-m3-fba0b2.testnet. Note: The pull request has a 'feature' label and 340 changed lines, exceeding the 200-line threshold defined in clause 3 for a larger reward. Although the contributor is a first-time contributor, the specific criteria for clause 3 regarding size or feature labels takes precedence for the reward amount calculation in this context.\n\nSkipped\n[#5] Skipped work for clause 1. Note: skipped: not a first-time contributor.\n\nBudget left\nInitial budget: 1,400,000,000,000,000,000,000,000 yoctoNEAR.\nSpent: 600,000,000,000,000,000,000,000 yoctoNEAR (sum of [#1], [#2], [#3]).\nRemaining: 800,000,000,000,000,000,000,000 yoctoNEAR.\nNote: The requested amount in [#4] is not yet spent.\n\nNext term\nRenewal requested. The agent fulfilled payment obligations for clauses 1 and 2 (3 payments) and correctly skipped a non-qualifying work entry (clause 1). One request for clause 3 is pending vote.",
-    "reportHash": "916d46a084c171f487574ad66aa9682c4853c0bf59601345e0ebd6ac26b7e950",
-    "logIndex": 6,
-    "proposalTx": "4E9r2Yernts3SYhCWvGEdZwjJzP3PuSaYaZ9TzqrVNyk",
-    "receiptHash": "71a8ff68eebeb505527fe9e10d06481bd6a2e9be3c64b15365f985a9fd492372",
+    "reportText": "Paid\n[#1] 200000000000000000000000 yoctoNEAR to mramaran-dev.testnet (PR #1)\n[#4] 200000000000000000000000 yoctoNEAR to adhish.testnet (PR #4)\n[#7] 200000000000000000000000 yoctoNEAR to ashwins.testnet (PR #7)\n[#8] 500000000000000000000000 yoctoNEAR to mramaran-dev.testnet (PR #2)\n[#9] 500000000000000000000000 yoctoNEAR to maran-dev.testnet (PR #5)\n\nSent to vote\n[#2] 500000000000000000000000 yoctoNEAR requested for mramaran-dev.testnet (PR #2)\n[#5] 500000000000000000000000 yoctoNEAR requested for maran-dev.testnet (PR #5)\n\nSkipped\n[#3] PR #3 skipped: formatting-only change to README, defined as trivial, not valid for reward under clause 1.\n[#6] PR #6 skipped: formatting-only change (wrapping long line in README), defined as trivial, not valid for reward under Clause 1.\n\nBudget left\n1800000000000000000000000 yoctoNEAR\n(Calculated as 3400000000000000000000000 available minus 1600000000000000000000000 spent)\n\nNext term\nThe agent requests renewal. It successfully processed 5 payments totaling 1600000000000000000000000 yoctoNEAR and correctly identified 2 trivial PRs for skipping. The remaining budget is sufficient for continued operations.",
+    "reportHash": "10e26b990563104ebd687aa6a4c27c44739aecbde3a2c55ce858b871f0c97761",
+    "logIndex": 10,
+    "proposalTx": "2TKSVjM77r2UFouxV2WNtX1rq8nxtt6dRd5YdYow35M1",
+    "receiptHash": "67ba3abc48097367e16abcf72bd541ffdb4840a47d0b39f5b63be04fb1923cd0",
     "rejectTxs": [
-      "Hb4BAw1ka28ZH4wm72fdcdFSv4zExSepb8s5BKN5pu2t",
-      "5ZCSx9nJp3S71cF7TXHrrYeNXRmRkqM8oSsMYtF3M8zq"
+      "6cbULWEATYjYMzEpVwB6Fzcs7sy8utSGa8LE9JShrYuZ",
+      "Gvj5jFLynRjpZ9N95boZA66BAMVAa6bPGe2XZB8JA6gA"
     ]
   },
   "budget": {
-    "total": "2000000000000000000000000",
-    "spent": "600000000000000000000000",
-    "availableAtReport": "1400000000000000000000000"
+    "total": "5000000000000000000000000",
+    "spent": "1600000000000000000000000",
+    "availableAtReport": "3400000000000000000000000"
   },
   "end": {
-    "termEndedTx": "2aTV7tu1htab2R5PCULxYUEcikf95HiTQM3qe2fLcvaq",
+    "termEndedTx": "48H3tuRiXxuyA4dfNTQzJZgFLsVckbQkTZ9BdDzxbNHv",
     "termEndedError": "Smart contract panicked: term ended",
-    "fireProposeTx": "F1eJbeP4wVu3W1JTj7gUYV4ZMQuSxHT6JXnNbXsnrDw5",
+    "fireProposeTx": "6PesRmUYWNEBuhHqn2rcGCXssuTkLUvrG2Y3XiyRshJs",
     "fireVoteTxs": [
-      "DgKD6hmxQKVyByZeiS1WeTQz3EA9QkSEbACFN4cYGhw7",
-      "5fopmFDQ1MVGsoqoA5mx8Q1EPZ4gVbBW1caKqCkfWDEE"
+      "9xUpNtnrQs4b7DJcmgeTHPz5ef7JqnnMMschjmkWH3Ln",
+      "CSkLbhDioLaXRigYeAm8q4vZdQwAPiou48DuJtBkqKEU"
     ],
-    "sweepTx": "GZUCPi77BchtzET1dXtjNPdC4WE65uPkt5gytSTbkypP",
-    "firedAmount": "2433371664646956000000000",
-    "sweptAmount": "114510000000000000000000",
+    "sweepTx": "JCPgoEjy5HjdoLUbxBJ13WMbSTMjPuA12iHU3QsU7VtN",
+    "firedAmount": "4410325380840755000000000",
+    "sweptAmount": "113260000000000000000000",
     "agentAttempt": "InvalidAccessKey (access key does not exist)"
   },
   "log": [
@@ -210,100 +285,144 @@
       "index": 0,
       "kind": "Hired",
       "clause_id": null,
-      "amount": "2000000000000000000000000",
+      "amount": "5000000000000000000000000",
       "recipient": null,
       "evidence_url": null,
       "receipt_hash": null,
       "note": "Contributor Rewards Steward",
-      "timestamp_ms": 1793983281277
+      "timestamp_ms": 1794062822069
     },
     {
       "index": 1,
       "kind": "Paid",
-      "clause_id": 1,
+      "clause_id": 2,
       "amount": "200000000000000000000000",
-      "recipient": "alice-dev.termwork-m3-fba0b2.testnet",
-      "evidence_url": "https://github.com/termwork/demo/pull/1",
-      "receipt_hash": "e3ad67f3ab09ff5aab0806bf34ca107a70ab1df6b925314c8a617d89de479524",
+      "recipient": "mramaran-dev.testnet",
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/1",
+      "receipt_hash": "7d47fd279d0212f589d7b47d17da66c2fa39545125875825322aeff48e23b506",
       "note": null,
-      "timestamp_ms": 1793983297002
+      "timestamp_ms": 1794062833597
     },
     {
       "index": 2,
-      "kind": "Paid",
-      "clause_id": 2,
-      "amount": "200000000000000000000000",
-      "recipient": "bob-codes.termwork-m3-fba0b2.testnet",
-      "evidence_url": "https://github.com/termwork/demo/pull/2",
-      "receipt_hash": "b207f549bf9ff980247f47d7285e6a45cbc07c9c6b8503a87af608aee16aaecf",
-      "note": null,
-      "timestamp_ms": 1793983307372
-    },
-    {
-      "index": 3,
-      "kind": "Paid",
-      "clause_id": 2,
-      "amount": "200000000000000000000000",
-      "recipient": "carol-w.termwork-m3-fba0b2.testnet",
-      "evidence_url": "https://github.com/termwork/demo/pull/3",
-      "receipt_hash": "e4605f893b0ab7b3e714e1a7dffdacda69759dc96a6d3e3db27c986959a46fbc",
-      "note": null,
-      "timestamp_ms": 1793983317254
-    },
-    {
-      "index": 4,
       "kind": "Requested",
       "clause_id": 3,
       "amount": "500000000000000000000000",
-      "recipient": "dave-builds.termwork-m3-fba0b2.testnet",
-      "evidence_url": "https://github.com/termwork/demo/pull/4",
-      "receipt_hash": "52081c1123b30ff2a67b3cdf3cce3c0d405b9b90b017bbc285cecdf419b9d5ac",
-      "note": "The pull request has a 'feature' label and 340 changed lines, exceeding the 200-line threshold defined in clause 3 for a larger reward. Although the contributor is a first-time contributor, the specific criteria for clause 3 regarding size or feature labels takes precedence for the reward amount calculation in this context.",
-      "timestamp_ms": 1793983334240
+      "recipient": "mramaran-dev.testnet",
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/2",
+      "receipt_hash": "69594b0dff24b50c1a85ebdd5c515a39004bdd49cb538f970b0b66170f7ff6e5",
+      "note": "The pull request is labeled 'feature' and adds new display helpers, which qualifies it for the larger reward tier under clause 3. The presence of a NEAR account in the body satisfies the payment requirements.",
+      "timestamp_ms": 1794062839694
     },
     {
-      "index": 5,
+      "index": 3,
       "kind": "Work",
       "clause_id": 1,
       "amount": null,
       "recipient": null,
-      "evidence_url": "https://github.com/termwork/demo/pull/5",
-      "receipt_hash": "2aa248389fed041f932bb64b3dc3523846e962afcce4beca774d335f8d5a4353",
-      "note": "skipped: not a first-time contributor",
-      "timestamp_ms": 1793983344481
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/3",
+      "receipt_hash": "80884bce138304c5d47664fc7e185074802bf6478136fa51f7ce53d64e6efdc2",
+      "note": "skipped: The pull request is a formatting-only change to the README, which is explicitly defined as trivial and therefore not valid for reward under clause 1.",
+      "timestamp_ms": 1794062845753
+    },
+    {
+      "index": 4,
+      "kind": "Paid",
+      "clause_id": 2,
+      "amount": "200000000000000000000000",
+      "recipient": "adhish.testnet",
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/4",
+      "receipt_hash": "7b07a9d1e02717fb70c6b15d680edd292e5a255940eddfe8690c631df94f73cc",
+      "note": null,
+      "timestamp_ms": 1794062851230
+    },
+    {
+      "index": 5,
+      "kind": "Requested",
+      "clause_id": 3,
+      "amount": "500000000000000000000000",
+      "recipient": "maran-dev.testnet",
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/5",
+      "receipt_hash": "269f9c653bf1f504f47f63799507c9cdf1d43c958eb7f44ab8b36113339be814",
+      "note": "The pull request is labeled 'feature' and is not trivial, qualifying for the larger reward tier. Clause 4 is satisfied as a NEAR account is provided and no prior payment is indicated.",
+      "timestamp_ms": 1794062857251
     },
     {
       "index": 6,
+      "kind": "Work",
+      "clause_id": 1,
+      "amount": null,
+      "recipient": null,
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/6",
+      "receipt_hash": "367c15606a5a97bc85bebab5386aa762ef38da321c3f20a039cfcaa478cdebc3",
+      "note": "skipped: The pull request is a formatting-only change (wrapping a long line in the README), which is explicitly defined as trivial and therefore not valid for reward under Clause 1.",
+      "timestamp_ms": 1794062863352
+    },
+    {
+      "index": 7,
+      "kind": "Paid",
+      "clause_id": 2,
+      "amount": "200000000000000000000000",
+      "recipient": "ashwins.testnet",
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/7",
+      "receipt_hash": "088b868a34924ebec2ff00a2afb8ede576593257dcd15f22377a6efa4f15da0b",
+      "note": null,
+      "timestamp_ms": 1794062868749
+    },
+    {
+      "index": 8,
+      "kind": "PaidApproved",
+      "clause_id": 3,
+      "amount": "500000000000000000000000",
+      "recipient": "mramaran-dev.testnet",
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/2",
+      "receipt_hash": "69594b0dff24b50c1a85ebdd5c515a39004bdd49cb538f970b0b66170f7ff6e5",
+      "note": "The pull request is labeled 'feature' and adds new display helpers, which qualifies it for the larger reward tier under clause 3. The presence of a NEAR account in the body satisfies the payment requirements.",
+      "timestamp_ms": 1794062877282
+    },
+    {
+      "index": 9,
+      "kind": "PaidApproved",
+      "clause_id": 3,
+      "amount": "500000000000000000000000",
+      "recipient": "maran-dev.testnet",
+      "evidence_url": "https://github.com/Mramaran/mission-dao-demo/pull/5",
+      "receipt_hash": "269f9c653bf1f504f47f63799507c9cdf1d43c958eb7f44ab8b36113339be814",
+      "note": "The pull request is labeled 'feature' and is not trivial, qualifying for the larger reward tier. Clause 4 is satisfied as a NEAR account is provided and no prior payment is indicated.",
+      "timestamp_ms": 1794062885663
+    },
+    {
+      "index": 10,
       "kind": "RenewalProposed",
       "clause_id": null,
       "amount": "0",
       "recipient": null,
       "evidence_url": null,
-      "receipt_hash": "916d46a084c171f487574ad66aa9682c4853c0bf59601345e0ebd6ac26b7e950",
-      "note": "300 s requested",
-      "timestamp_ms": 1793983526924
+      "receipt_hash": "10e26b990563104ebd687aa6a4c27c44739aecbde3a2c55ce858b871f0c97761",
+      "note": "420 s requested",
+      "timestamp_ms": 1794063131389
     },
     {
-      "index": 7,
+      "index": 11,
       "kind": "Fired",
       "clause_id": null,
-      "amount": "2433371664646956000000000",
-      "recipient": "twfba0b2.sputnikv2.testnet",
+      "amount": "4410325380840755000000000",
+      "recipient": "tw4b411f.sputnikv2.testnet",
       "evidence_url": null,
       "receipt_hash": null,
       "note": "demo: term ended, not renewing",
-      "timestamp_ms": 1793983634466
+      "timestamp_ms": 1794063261596
     },
     {
-      "index": 8,
+      "index": 12,
       "kind": "Swept",
       "clause_id": null,
-      "amount": "114510000000000000000000",
-      "recipient": "twfba0b2.sputnikv2.testnet",
+      "amount": "113260000000000000000000",
+      "recipient": "tw4b411f.sputnikv2.testnet",
       "evidence_url": null,
       "receipt_hash": null,
       "note": null,
-      "timestamp_ms": 1793983689857
+      "timestamp_ms": 1794063280939
     }
   ]
 }

@@ -2,7 +2,8 @@ import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD, nearToYocto, type
 import { complete } from "../../agent/src/nearai";
 import { decisionMessages } from "../../agent/src/prompts";
 import { parseDecision, validate, type Decision } from "../../agent/src/validate";
-import { checkLimit } from "./limits";
+import { nodeHandler, scrub, type HandleReq, type HandleRes } from "./_lib/http";
+import { makeLimiter } from "./_lib/limits";
 
 export interface DecideDeps {
   complete: typeof complete;
@@ -13,18 +14,9 @@ export interface DecideDeps {
   apiKey?: string;
   model?: string;
 }
-export interface HandleReq {
-  method: string;
-  body: string;
-  ip: string;
-  /** Set by the Node handler when the body exceeded the limit and was not buffered. */
-  oversized?: boolean;
-}
-export interface HandleRes {
-  status: number;
-  json: unknown;
-  headers?: Record<string, string>;
-}
+export type { HandleReq, HandleRes };
+
+export const limiter = makeLimiter(5, 200);
 
 const MAX_BODY = 2048;
 const NEAR_RE = /^(?=.{2,64}$)([a-z\d]+([-_][a-z\d]+)*\.)*[a-z\d]+([-_][a-z\d]+)*$/;
@@ -89,14 +81,6 @@ function rulesFor(answer: Decision | { error: string }, input: Input): { rule: s
   return out;
 }
 
-function scrub(res: HandleRes, secrets: string[]): HandleRes {
-  const live = secrets.filter((s) => s.length > 0);
-  if (!live.length) return res;
-  let text = JSON.stringify(res.json);
-  for (const s of live) text = text.split(s).join("[redacted]").split(JSON.stringify(s).slice(1, -1)).join("[redacted]");
-  return { ...res, json: JSON.parse(text) };
-}
-
 async function run(req: HandleReq, deps: DecideDeps): Promise<HandleRes> {
   if (req.method !== "POST") return { status: 405, json: { error: "use POST" }, headers: { Allow: "POST" } };
   if (req.oversized || new TextEncoder().encode(req.body).length > MAX_BODY) return { status: 413, json: { error: "request body too large (max 2048 bytes)" } };
@@ -105,7 +89,7 @@ async function run(req: HandleReq, deps: DecideDeps): Promise<HandleRes> {
   const input = parseInput(req.body);
   if ("error" in input) return { status: 400, json: input };
 
-  const lim = checkLimit(req.ip, deps.now());
+  const lim = limiter(req.ip, deps.now());
   if (!lim.ok) return { status: 429, json: { error: "too many requests, slow down", retryAfterSec: lim.retryAfterSec } };
 
   const mandate: MandateView = {
@@ -155,42 +139,15 @@ export async function handle(req: HandleReq, deps: DecideDeps): Promise<HandleRe
   return scrub(await run(req, deps), deps.secrets ?? []);
 }
 
-/** Buffers up to the limit; beyond it, keeps draining (discarding) so the connection is not reset. */
-async function readBody(req: AsyncIterable<Buffer | string>): Promise<{ body: string; oversized: boolean }> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const c of req) {
-    const b = typeof c === "string" ? Buffer.from(c) : c;
-    size += b.length;
-    if (size > 1_000_000) break;
-    if (size <= MAX_BODY) chunks.push(b);
-  }
-  return size > MAX_BODY ? { body: "", oversized: true } : { body: Buffer.concat(chunks).toString("utf8"), oversized: false };
-}
-
 /** Vercel Node handler. */
-export default async function handler(
-  req: { method?: string; headers: Record<string, string | string[] | undefined>; socket?: { remoteAddress?: string } } & AsyncIterable<Buffer | string>,
-  res: { statusCode: number; setHeader(k: string, v: string): void; end(s: string): void },
-): Promise<void> {
-  const h = (k: string) => {
-    const v = req.headers[k];
-    return (Array.isArray(v) ? v[0] : v)?.split(",")[0]?.trim() || undefined;
-  };
-  const ip = h("x-vercel-forwarded-for") || h("x-real-ip") || h("x-forwarded-for") || req.socket?.remoteAddress || "unknown";
-  const apiKey = process.env.NEARAI_API_KEY ?? "";
-  const { body, oversized } = req.method === "POST" ? await readBody(req) : { body: "", oversized: false };
-  const r = await handle({ method: req.method ?? "GET", body, ip, oversized }, {
-    complete,
-    now: () => Date.now(),
-    secrets: [apiKey],
-    apiKey,
-    model: process.env.NEARAI_MODEL ?? "",
-  });
-  res.statusCode = r.status;
-  res.setHeader("content-type", "application/json");
-  res.setHeader("cache-control", "no-store");
-  for (const [k, v] of Object.entries(r.headers ?? {})) res.setHeader(k, v);
-  if (r.status === 413) res.setHeader("connection", "close");
-  res.end(JSON.stringify(r.json));
-}
+export default nodeHandler(
+  (req) =>
+    handle(req, {
+      complete,
+      now: () => Date.now(),
+      secrets: [process.env.NEARAI_API_KEY ?? ""],
+      apiKey: process.env.NEARAI_API_KEY ?? "",
+      model: process.env.NEARAI_MODEL ?? "",
+    }),
+  { maxBody: MAX_BODY, secrets: () => [process.env.NEARAI_API_KEY ?? ""] },
+);

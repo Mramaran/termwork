@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { handle, type DecideDeps } from "./decide";
-import { _resetLimits } from "./limits";
+import { handle, limiter, type DecideDeps } from "./decide";
 
 const SENTINEL = "sk-test-SENTINEL-1234567890";
 const T0 = 1_700_000_000_000;
@@ -36,7 +35,7 @@ const deps = (c: DecideDeps["complete"] = fakeComplete({ qualifies: true, clause
 });
 
 beforeEach(() => {
-  _resetLimits();
+  limiter.reset();
   process.env.NEARAI_API_KEY = SENTINEL;
 });
 afterEach(() => {

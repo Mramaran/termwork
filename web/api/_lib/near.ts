@@ -81,3 +81,14 @@ export async function councilMembers(d: NearDeps, daoId: string): Promise<string
 
 export const txStatus = (d: NearDeps, hash: string, sender: string): Promise<TxStatus> =>
   rpc<TxStatus>(d, "EXPERIMENTAL_tx_status", { tx_hash: hash, sender_account_id: sender, wait_until: "FINAL" });
+
+/** The permission of an access key: "FullAccess" or an object such as { FunctionCall: {...} }. Throws if the key is unknown. */
+export async function accessKeyPermission(d: NearDeps, accountId: string, publicKey: string): Promise<unknown> {
+  const r = await rpc<{ permission?: unknown }>(d, "query", {
+    request_type: "view_access_key",
+    finality: "optimistic",
+    account_id: accountId,
+    public_key: publicKey,
+  });
+  return r.permission;
+}

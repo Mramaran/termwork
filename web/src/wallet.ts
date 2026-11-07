@@ -1,4 +1,5 @@
 import { actionCreators } from "@near-js/transactions";
+import { AUTH_ACTION, AUTH_RECIPIENT, type CouncilProof } from "./authConst";
 import { DAO_ID, VOTE_GAS, voteArgs } from "./chain";
 
 /** Wallet Selector is loaded lazily so the page renders (read-only) even if the wallet bundle fails. */
@@ -42,4 +43,23 @@ export async function vote(id: number, approve: boolean): Promise<void> {
     receiverId: DAO_ID,
     actions: [actionCreators.functionCall("act_proposal", voteArgs(id, approve), BigInt(VOTE_GAS), 0n)],
   });
+}
+
+const toBase64 = (b: Uint8Array): string => btoa(String.fromCharCode(...b));
+
+/** Asks the connected wallet to sign a short-lived NEP-413 message proving the user is a council member. */
+export async function signCouncilMessage(): Promise<CouncilProof> {
+  const failed = new Error("Your wallet did not sign the message.");
+  try {
+    const s = await selector();
+    const wallet = await s.wallet();
+    if (!wallet.signMessage) throw failed;
+    const message = JSON.stringify({ action: AUTH_ACTION, ts: Date.now() });
+    const nonce = crypto.getRandomValues(new Uint8Array(32));
+    const signed = await wallet.signMessage({ message, recipient: AUTH_RECIPIENT, nonce: nonce as unknown as Buffer });
+    if (!signed) throw failed;
+    return { accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, message, nonce: toBase64(nonce) };
+  } catch {
+    throw failed;
+  }
 }

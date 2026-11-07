@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { KeyPair } from "near-api-js";
+import { KeyPair, KeyPairSigner } from "near-api-js";
 import { describe, expect, it } from "vitest";
 import { AUTH_RECIPIENT, verifyCouncil, type CouncilProof } from "./auth";
 
@@ -8,30 +7,24 @@ const DAO = "dao.testnet";
 const kp = KeyPair.fromRandom("ed25519");
 const pub = kp.getPublicKey().toString();
 
-function borshString(s: string): Buffer {
-  const b = Buffer.from(s, "utf8");
-  const len = Buffer.alloc(4);
-  len.writeUInt32LE(b.length);
-  return Buffer.concat([len, b]);
-}
-function hashOf(message: string, nonce: Buffer, recipient: string): Buffer {
-  const tag = Buffer.alloc(4);
-  tag.writeUInt32LE(2147484061);
-  return createHash("sha256")
-    .update(Buffer.concat([tag, borshString(message), nonce, borshString(recipient), Buffer.from([0])]))
-    .digest();
+async function signWith(key: KeyPair, message: string, nonce: Buffer, recipient: string, callbackUrl?: string): Promise<string> {
+  const signed = await new KeyPairSigner(key).signNep413Message("alice.testnet", { message, recipient, nonce, callbackUrl });
+  return Buffer.from(signed.signature).toString("base64");
 }
 
-function proof(over: { ts?: number; recipient?: string; accountId?: string; nonce?: Buffer; signKey?: KeyPair } = {}): CouncilProof {
+async function proof(
+  over: { ts?: number; recipient?: string; accountId?: string; nonce?: Buffer; signKey?: KeyPair; callbackUrl?: string } = {},
+): Promise<CouncilProof> {
   const message = JSON.stringify({ action: "mission-dao-pay", ts: over.ts ?? NOW });
   const nonce = over.nonce ?? Buffer.alloc(32, 7);
-  const sig = (over.signKey ?? kp).sign(hashOf(message, nonce, over.recipient ?? AUTH_RECIPIENT)).signature;
+  const signature = await signWith(over.signKey ?? kp, message, nonce, over.recipient ?? AUTH_RECIPIENT, over.callbackUrl);
   return {
     accountId: over.accountId ?? "alice.testnet",
     publicKey: pub,
-    signature: Buffer.from(sig).toString("base64"),
+    signature,
     message,
     nonce: nonce.toString("base64"),
+    ...(over.callbackUrl === undefined ? {} : { callbackUrl: over.callbackUrl }),
   };
 }
 
@@ -53,48 +46,65 @@ function deps(opts: { permission?: unknown; council?: string[]; keyMissing?: boo
 
 describe("verifyCouncil", () => {
   it("accepts a valid proof from a council member", async () => {
-    expect(await verifyCouncil(proof(), deps())).toEqual({ ok: true, accountId: "alice.testnet" });
+    expect(await verifyCouncil(await proof(), deps())).toEqual({ ok: true, accountId: "alice.testnet" });
   });
   it("refuses an account that is not on the council", async () => {
-    const r = await verifyCouncil(proof(), deps({ council: ["bob.testnet"] }));
+    const r = await verifyCouncil(await proof(), deps({ council: ["bob.testnet"] }));
     expect(r).toEqual({ ok: false, error: "only council members can run payments" });
   });
   it("refuses a function-call key", async () => {
-    const r = await verifyCouncil(proof(), deps({ permission: { FunctionCall: { receiver_id: DAO, method_names: [], allowance: null } } }));
+    const r = await verifyCouncil(await proof(), deps({ permission: { FunctionCall: { receiver_id: DAO, method_names: [], allowance: null } } }));
     expect(r.ok).toBe(false);
   });
   it("refuses a key that is not on the account", async () => {
-    expect((await verifyCouncil(proof(), deps({ keyMissing: true }))).ok).toBe(false);
+    expect((await verifyCouncil(await proof(), deps({ keyMissing: true }))).ok).toBe(false);
+  });
+  it("accepts a proof signed over a callbackUrl (MyNearWallet)", async () => {
+    const url = "https://example.app/path?x=1";
+    expect(await verifyCouncil(await proof({ callbackUrl: url }), deps())).toEqual({ ok: true, accountId: "alice.testnet" });
+  });
+  it("refuses a proof signed with a callbackUrl but sent without it", async () => {
+    const { callbackUrl: _drop, ...p } = await proof({ callbackUrl: "https://example.app/" });
+    expect((await verifyCouncil(p, deps())).ok).toBe(false);
+  });
+  it("refuses a proof signed without a callbackUrl but sent with one, or with a different one", async () => {
+    expect((await verifyCouncil({ ...(await proof()), callbackUrl: "https://example.app/" }, deps())).ok).toBe(false);
+    expect((await verifyCouncil({ ...(await proof({ callbackUrl: "https://a.app/" })), callbackUrl: "https://b.app/" }, deps())).ok).toBe(false);
+  });
+  it("refuses an oversized callbackUrl", async () => {
+    const big = "https://e.app/" + "a".repeat(2048);
+    expect((await verifyCouncil(await proof({ callbackUrl: big }), deps())).ok).toBe(false);
   });
   it("refuses a ts older than 5 minutes, and one too far ahead", async () => {
-    expect((await verifyCouncil(proof({ ts: NOW - 300_001 }), deps())).ok).toBe(false);
-    expect((await verifyCouncil(proof({ ts: NOW + 300_001 }), deps())).ok).toBe(false);
-    expect((await verifyCouncil(proof({ ts: NOW - 300_000 }), deps())).ok).toBe(true);
+    expect((await verifyCouncil(await proof({ ts: NOW - 300_001 }), deps())).ok).toBe(false);
+    expect((await verifyCouncil(await proof({ ts: NOW + 300_001 }), deps())).ok).toBe(false);
+    expect((await verifyCouncil(await proof({ ts: NOW - 300_000 }), deps())).ok).toBe(true);
   });
   it("refuses a wrong recipient", async () => {
-    expect((await verifyCouncil(proof({ recipient: "someone-else" }), deps())).ok).toBe(false);
+    expect((await verifyCouncil(await proof({ recipient: "someone-else" }), deps())).ok).toBe(false);
   });
   it("refuses a tampered message", async () => {
-    const p = proof();
+    const p = await proof();
     const r = await verifyCouncil({ ...p, message: JSON.stringify({ action: "mission-dao-pay", ts: NOW + 1 }) }, deps());
     expect(r.ok).toBe(false);
   });
   it("refuses a signature from a different key", async () => {
-    const r = await verifyCouncil(proof({ signKey: KeyPair.fromRandom("ed25519") }), deps());
+    const r = await verifyCouncil(await proof({ signKey: KeyPair.fromRandom("ed25519") }), deps());
     expect(r.ok).toBe(false);
   });
   it("refuses a nonce that is not 32 bytes", async () => {
-    expect((await verifyCouncil(proof({ nonce: Buffer.alloc(31, 7) }), deps())).ok).toBe(false);
+    const p = await proof();
+    expect((await verifyCouncil({ ...p, nonce: Buffer.alloc(31, 7).toString("base64") }, deps())).ok).toBe(false);
   });
   it("refuses another action in the message", async () => {
     const message = JSON.stringify({ action: "other", ts: NOW });
     const nonce = Buffer.alloc(32, 7);
-    const sig = kp.sign(hashOf(message, nonce, AUTH_RECIPIENT)).signature;
-    const p = { ...proof(), message, signature: Buffer.from(sig).toString("base64") };
+    const p = { ...(await proof()), message, signature: await signWith(kp, message, nonce, AUTH_RECIPIENT) };
     expect((await verifyCouncil(p, deps())).ok).toBe(false);
   });
   it("returns an error, never throws, on malformed bodies", async () => {
-    for (const bad of [null, undefined, 5, "x", {}, { ...proof(), signature: 3 }, { ...proof(), publicKey: "nope" }, { ...proof(), message: "{" }]) {
+    const p0 = await proof();
+    for (const bad of [null, undefined, 5, "x", {}, { ...p0, signature: 3 }, { ...p0, publicKey: "nope" }, { ...p0, message: "{" }, { ...p0, callbackUrl: 5 }, { ...p0, callbackUrl: "" }]) {
       const r = await verifyCouncil(bad, deps());
       expect(r.ok).toBe(false);
     }

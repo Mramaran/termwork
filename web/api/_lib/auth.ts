@@ -8,6 +8,7 @@ export { AUTH_RECIPIENT, type CouncilProof };
 export type CouncilResult = { ok: true; accountId: string } | { ok: false; error: string };
 
 const NEP413_TAG = 2147484061;
+const MAX_CALLBACK_URL = 2048;
 const BAD_PROOF = "invalid signature proof";
 const fail = (error: string): CouncilResult => ({ ok: false, error });
 
@@ -18,12 +19,12 @@ const borshString = (s: string): Buffer => {
   return Buffer.concat([len, b]);
 };
 
-/** sha256 of the NEP-413 payload (callbackUrl: None). */
-function nep413Hash(message: string, nonce: Buffer, recipient: string): Buffer {
+/** sha256 of the NEP-413 payload; callbackUrl is Option<String> (0x00 None, 0x01 + string). */
+function nep413Hash(message: string, nonce: Buffer, recipient: string, callbackUrl?: string): Buffer {
   const tag = Buffer.alloc(4);
   tag.writeUInt32LE(NEP413_TAG);
   return createHash("sha256")
-    .update(Buffer.concat([tag, borshString(message), nonce, borshString(recipient), Buffer.from([0])]))
+    .update(Buffer.concat([tag, borshString(message), nonce, borshString(recipient), callbackUrl === undefined ? Buffer.from([0]) : Buffer.concat([Buffer.from([1]), borshString(callbackUrl)])]))
     .digest();
 }
 
@@ -46,12 +47,14 @@ export async function verifyCouncil(p: unknown, d: { near: NearDeps; daoId: stri
     } catch {
       return fail(BAD_PROOF);
     }
+    const cb = (p as { callbackUrl?: unknown }).callbackUrl;
+    if (cb !== undefined && (typeof cb !== "string" || cb.length === 0 || cb.length > MAX_CALLBACK_URL)) return fail(BAD_PROOF);
     if (!parsed || parsed.action !== AUTH_ACTION || typeof parsed.ts !== "number" || !Number.isFinite(parsed.ts)) return fail(BAD_PROOF);
     if (Math.abs(d.now - parsed.ts) > AUTH_MAX_SKEW_MS) return fail("signature expired, sign again");
 
     let valid: boolean;
     try {
-      valid = PublicKey.fromString(p.publicKey).verify(nep413Hash(p.message, nonce, AUTH_RECIPIENT), Buffer.from(p.signature, "base64"));
+      valid = PublicKey.fromString(p.publicKey).verify(nep413Hash(p.message, nonce, AUTH_RECIPIENT, cb), Buffer.from(p.signature, "base64"));
     } catch {
       return fail(BAD_PROOF);
     }

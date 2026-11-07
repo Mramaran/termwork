@@ -56,9 +56,10 @@ export async function signCouncilMessage(): Promise<CouncilProof> {
     if (!wallet.signMessage) throw failed;
     const message = JSON.stringify({ action: AUTH_ACTION, ts: Date.now() });
     const nonce = crypto.getRandomValues(new Uint8Array(32));
-    const signed = await wallet.signMessage({ message, recipient: AUTH_RECIPIENT, nonce: nonce as unknown as Buffer });
+    const callbackUrl = window.location.href;
+    const signed = await wallet.signMessage({ message, recipient: AUTH_RECIPIENT, nonce: nonce as unknown as Buffer, callbackUrl });
     if (!signed) throw failed;
-    return { accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, message, nonce: toBase64(nonce) };
+    return { accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, message, nonce: toBase64(nonce), callbackUrl };
   } catch {
     throw failed;
   }

@@ -11,4 +11,6 @@ export interface CouncilProof {
   message: string;
   /** base64, 32 bytes */
   nonce: string;
+  /** The callbackUrl the wallet signed over; omitted when none was used. */
+  callbackUrl?: string;
 }

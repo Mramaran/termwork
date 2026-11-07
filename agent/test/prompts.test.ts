@@ -22,6 +22,11 @@ describe("decisionMessages", () => {
     expect(user.near_account).toBe("alice.demo.testnet");
   });
 
+  it("tells the model a small code fix is never trivial", () => {
+    const system = decisionMessages(mandate, pr)[0]!.content as string;
+    expect(system).toContain("A change to code that fixes a bug or adds behaviour is never trivial, however few lines it changes.");
+  });
+
   it("sends near_account null when the PR names no account", () => {
     const user = JSON.parse(decisionMessages(mandate, { ...pr, nearAccount: null })[1]!.content as string);
     expect(user.near_account).toBeNull();

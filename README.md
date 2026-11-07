@@ -43,7 +43,7 @@ You see a `PASS` line for each assertion, in this order:
 1. The mandate has no access keys after setup.
 2. After `hire`, the agent's function-call key is the only key.
 3. The agent pays merged pull requests, sends the big one to a DAO vote and skips one. In fixture mode the counts are exact (3 paid, 1 request, 1 skip); with a live model they depend on the model.
-4. The DAO votes the big spend down and no money moves.
+4. The DAO votes on each big spend: it approves them and the money moves (`DEMO_BIG_SPEND=reject` votes them down instead, and no money moves).
 5. The agent files its renewal case, and every `[#n]` citation in the report points at a real work-log entry.
 6. The term ends. A late `spend` is sent anyway and fails on-chain with `term ended`.
 7. The DAO votes `fire`, the key list becomes empty, `fire` returns the budget to the DAO, and `sweep` forwards proposal bonds that Sputnik returns after the fire.

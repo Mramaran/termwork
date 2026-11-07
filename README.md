@@ -49,34 +49,61 @@ You see a `PASS` line for each assertion, in this order:
 7. The DAO votes `fire`, the key list becomes empty, `fire` returns the budget to the DAO, and `sweep` forwards proposal bonds that Sputnik returns after the fire.
 8. The agent retries with its old key and the chain rejects it as a deleted access key.
 
-The run writes `demo-output.json` (git-ignored) with every transaction hash and account. Two transactions from a recorded run on testnet:
+The run writes `demo-output.json` (git-ignored) with every transaction hash and account. Some transactions from the recorded run that the web page replays:
 
-- The DAO hires the agent: <https://testnet.nearblocks.io/txns/9YMqHeQZi395zDsKEhroY94PLR8JgkRwmptMUHUppVpG>
-- A payment after the term ended, failed on-chain: <https://testnet.nearblocks.io/txns/2aTV7tu1htab2R5PCULxYUEcikf95HiTQM3qe2fLcvaq>
-- The DAO fires the agent: <https://testnet.nearblocks.io/txns/F1eJbeP4wVu3W1JTj7gUYV4ZMQuSxHT6JXnNbXsnrDw5>
+- The DAO hires the agent: <https://testnet.nearblocks.io/txns/12THF4McgH6so9Vo7pkszK1nt64hMHYof6aARytgandq>
+- The agent pays PR #4 (0.2 NEAR) directly: <https://testnet.nearblocks.io/txns/3H6RpxoZPNgdKTvacm6tSrEhbyjfpgYCS6uYcKmZZU8i>
+- The council's vote that approves and pays PR #5 (0.5 NEAR): <https://testnet.nearblocks.io/txns/9HPRJY8FMexFrGJJA6W2UNqfdAD5PMvZZen3vhgrupPU>
+- A payment after the term ended, failed on-chain: <https://testnet.nearblocks.io/txns/48H3tuRiXxuyA4dfNTQzJZgFLsVckbQkTZ9BdDzxbNHv>
+- The DAO fires the agent: <https://testnet.nearblocks.io/txns/CSkLbhDioLaXRigYeAm8q4vZdQwAPiou48DuJtBkqKEU>
 
-That run (2026-11-06, `AGENT_MODE=live`) used the agent account `steward.termwork-m2-fba0b2.testnet` and the DAO `twfba0b2.sputnikv2.testnet`. The model paid pull requests #1–#3 (0.2 NEAR each), sent #4 to a DAO vote that rejected it, and skipped #5; all 6 receipts are `verified: true`.
+That run (2026-11-07, `AGENT_MODE=live`, `DEMO_SOURCE=github`) used the agent account `steward.termwork-m2-4b411f.testnet` and the DAO `tw4b411f.sputnikv2.testnet`, and worked the 7 real merged pull requests of [`Mramaran/mission-dao-demo`](https://github.com/Mramaran/mission-dao-demo). The model (`Qwen/Qwen3.8-27B`) paid #1, #4 and #7 (0.2 NEAR each), sent #2 and #5 to DAO votes that approved and paid them (0.5 NEAR each), and skipped #3 and #6 as formatting-only changes. All 7 decision receipts are `verified: true`.
 
 ### The web page
 
-Live at <https://termwork-nu.vercel.app>. It has three tabs:
+Live at <https://termwork-nu.vercel.app>. A **Connect Intear** (or MyNearWallet) button sits in the header. The page has three tabs, in the order of the pitch:
 
-- **Watch our run** replays the recorded testnet run as five steps (Hire, Work, Vote, Renew, Fired). Each step has a feed of what happened and a "Check it yourself" list of links to the NEAR explorer and to the signed AI receipts. A tick appears only after the page has confirmed the claim (a transaction hash is present, a receipt loads with `verified: true`, the report hash matches on-chain, the agent account has no keys left).
-- **Try the AI live** sends a pull request you describe to the real model and shows which fixed rules pass. Nothing is paid.
-- **Run it yourself** has the commands to reproduce the run on testnet.
+1. **Analyse a repo** runs the agent on real GitHub pull requests (see [Real pull requests](#real-pull-requests) below), and lists every payment the agent has made under **Paid PRs**, read from its on-chain work log.
+2. **Watch a full term** replays the recorded run above as five steps (Hire, Work, Vote, Renew, Fired). Each step has a feed of what happened and a "Check it yourself" list of links to the NEAR explorer and to the signed AI receipts. A tick appears only after the page has confirmed the claim (a transaction hash is present, a receipt loads with `verified: true`, the report hash matches on-chain, the agent account has no keys left). Where the AI's renewal report disagrees with the contract's figures, the page says so and treats the contract as authoritative.
+3. **Run it yourself** has the commands to reproduce the run on testnet.
 
-Local development:
+### Real pull requests
+
+**Any public repository, analysis only.** Type `owner/name` (or a GitHub link), pick the merge window (last week, last month or custom dates) and click **Analyse**. The page reads the pull requests merged in that window (at most 30 per run). It asks the model about each one and passes the answer through the same fixed-rule validator the agent uses. Each row says what the agent would do: pay directly, send to a DAO vote, earn an amount but stay unclaimed (no `near:` line), or skip with a reason. Nothing is paid, and nothing is written to the repository.
+
+**The demo repository, real payments.** [`Mramaran/mission-dao-demo`](https://github.com/Mramaran/mission-dao-demo) is on the server's allowlist (`PAYABLE_REPOS`). Click **Analyse our demo repo**; rows that can be paid show **Ready to pay** with the AI's estimated amount.
+
+1. A council member connects their wallet in the header and clicks **Run payments**. The wallet signs a short-lived message (NEP-413). The server checks it against the account's on-chain keys and the DAO's council list, so ordinary visitors can watch but cannot trigger a payment.
+2. For each ready pull request, the server re-reads it from GitHub. It asks the model again and runs the validator. It checks the recipient account exists on testnet and that the pull request has not been paid or sent to a vote before. Only then does the agent key sign. The server never pays an amount or recipient that the browser sent.
+3. Up to 0.2 NEAR is paid by the agent at once (`spend`). A larger reward (a `feature` label, or more than 200 changed lines, for 0.5 NEAR) becomes a DAO proposal (`request_spend`), and the row shows **Approve & pay**. One council vote from the wallet passes it, and the DAO pays the contributor.
+4. When a payment lands, the pull request on GitHub gets a `💰 paid X NEAR` label and a comment with the transaction link. For a direct payment, the comment also carries the agent's decision receipt. For a DAO-approved payment, the server first checks the vote transaction on chain.
+
+**What gets paid.** The mission rewards every valid merged pull request. A trivial change (a typo, a whitespace or formatting-only change, or an automated bot update) earns nothing, and a code change that fixes a bug or adds behaviour is never trivial, however small. Each pull request is paid at most once, because the contract keeps the evidence URL. A pull request needs its contributor's account on its own line at the end of the description:
+
+```
+near: yourname.testnet
+```
+
+**Limits.** Analysing a repository other than the demo repo makes one model call per pull request, so it is limited to 2 runs a minute per visitor. The demo repo's analysis, payments and labels have their own limits. The agent's total spend is capped by the budget the DAO voted, and the agent key's gas allowance is 0.25 NEAR.
+
+### Local development and deploying
 
 1. Put `VITE_MANDATE_ID`, `VITE_DAO_ID` and `VITE_NETWORK=testnet` in the repo-root `.env` (`web/vite.config.ts` sets `envDir` to the repo root).
-2. `npm run -w web dev` -> Vite prints a local URL. The "Try the AI live" tab needs the `/api/decide` function, which only exists on Vercel.
-3. Voting from the page goes through a NEAR wallet (Intear or MyNearWallet) and is best-effort. The CLI vote in step 9 always works.
+2. `npm run -w web dev`, then open the local URL Vite prints. The `/api/*` functions only run on Vercel. To use them from the dev server, set `API_PROXY=https://termwork-nu.vercel.app` (for example in a git-ignored `.env.development.local`), and Vite forwards `/api` there.
+3. Voting from the page goes through a NEAR wallet (Intear or MyNearWallet). The CLI vote in step 9 always works.
 
-Deploy to Vercel (static page plus the `/api/decide` function behind "Try the AI live"):
+Deploy to Vercel (the static page plus the functions `decide`, `analyse`, `pay`, `label` and `paid`):
 
-1. Once: `npx vercel link --project termwork` at the repo root. The Vercel project must have `NEARAI_API_KEY` and `NEARAI_MODEL` in its environment variables (Production and Preview); the function reads them at request time, and without them it answers 503.
-2. `npm run -w scripts deploy-vercel` makes a preview deployment; `npm run -w scripts deploy-vercel -- --prod` updates https://termwork-nu.vercel.app. The script first runs `npm test` and the web typecheck, builds `web`, bundles `web/api/decide.ts` with esbuild, checks that the bundle loads and exports a handler, then runs a pinned Vercel CLI with `deploy --prebuilt`.
+1. Once: `npx vercel link --project termwork` at the repo root. Set these in the Vercel project's environment variables (see `.env.example` for each):
+   - `NEARAI_API_KEY` and `NEARAI_MODEL`;
+   - `MANDATE_ID`, `DAO_ID`, and `AGENT_PRIVATE_KEY` (the agent's function-call key, written to `.env` by `hire`);
+   - `PAYABLE_REPOS`;
+   - `GITHUB_TOKEN` (read) and `GITHUB_LABEL_TOKEN` (labels and comments on the demo repo only).
 
-GitHub Pages is not used. Leave `.github/workflows/pages.yml` disabled in the repository settings: a Pages build has no `/api/decide`, so the live tab would not work there.
+   The functions read them at request time and answer 503 without the ones they need.
+2. `npm run -w scripts deploy-vercel` makes a preview deployment. `npm run -w scripts deploy-vercel -- --prod` updates <https://termwork-nu.vercel.app>; pass `VITE_MANDATE_ID` and `VITE_DAO_ID` in the environment so the page reads the same mandate. The script first runs `npm test` and the web typecheck. It then builds `web`, bundles each function with esbuild, checks every bundle loads and exports a handler, and runs a pinned Vercel CLI with `deploy --prebuilt`.
+
+GitHub Pages is not used. Leave `.github/workflows/pages.yml` disabled in the repository settings: a Pages build has no `/api` functions, so analysis and payments would not work there.
 
 ## How it works
 
@@ -102,7 +129,7 @@ GitHub Pages is not used. Leave `.github/workflows/pages.yml` disabled in the re
  │ the only process that holds the key    │      │ stores a receipt per model answer      │
  └────────────────────────────────────────┘      └────────────────────────────────────────┘
 
- web/ (React, GitHub Pages): reads the chain and receipts/, shows the key card
+ web/ (React, on Vercel): reads the chain and receipts/; web/api/ analyses repos and pays the demo repo
 ```
 
 - **Mandate contract** (`contracts/mandate`, Rust, near-sdk 5). The DAO calls `hire`, `renew` and `fire` through Sputnik proposals; the contract adds or deletes its own function-call key in response. `spend` pays directly, only within the clause maximum, the spend threshold and the remaining budget (the DAO-voted total, which is the hire deposit plus renewal top-ups, never the account balance), and only once per evidence URL. A larger payment goes through `request_spend`, which opens a DAO proposal. `propose_renewal` stores the agent's report on-chain and opens a renewal proposal; only one can be open per term. After the term, `expire` (agent key or anyone) ends the mandate and deletes the key, and the DAO calls `release` to take the remaining budget back. After a `fire`, anyone can call `sweep` to forward leftover funds to the DAO.
@@ -166,7 +193,7 @@ Written from scratch during the hackathon; the first commit is dated 2026-11-05.
 
 ## Tests
 
-- `npm test` at the repo root runs the vitest suites of the signer, agent and web workspaces. It needs no network and no key.
+- `npm test` at the repo root runs the vitest suites of every workspace: signer, agent, web (page and `/api` functions), scripts and shared. It needs no network and no key.
 - `cargo test` in `contracts/mandate` runs the unit tests and the sandbox lifecycle tests, which run the mandate next to the real Sputnik DAO wasm. It needs Linux, macOS or WSL (the near-sandbox binary is not available for native Windows), `cargo-near` and the `wasm32-unknown-unknown` target.
 - `cargo test --test lifecycle` runs only the lifecycle tests. They build the wasm themselves with `cargo near build non-reproducible-wasm`, so they always test the current source. See [`contracts/mandate/README.md`](contracts/mandate/README.md) for WSL tips.
 

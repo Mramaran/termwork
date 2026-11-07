@@ -1,4 +1,6 @@
 import { actionCreators } from "@near-js/transactions";
+// Wallet Selector checks Buffer.isBuffer(nonce), so the nonce must be a real Buffer, not a Uint8Array.
+import { Buffer } from "buffer";
 import { AUTH_ACTION, AUTH_RECIPIENT, type CouncilProof } from "./authConst";
 import { DAO_ID, VOTE_GAS, voteArgs } from "./chain";
 
@@ -77,7 +79,7 @@ export async function signCouncilMessage(): Promise<CouncilProof> {
     const message = JSON.stringify({ action: AUTH_ACTION, ts: Date.now() });
     const nonce = crypto.getRandomValues(new Uint8Array(32));
     const callbackUrl = window.location.href;
-    const signed = await wallet.signMessage({ message, recipient: AUTH_RECIPIENT, nonce: nonce as unknown as Buffer, callbackUrl });
+    const signed = await wallet.signMessage({ message, recipient: AUTH_RECIPIENT, nonce: Buffer.from(nonce), callbackUrl });
     if (!signed) throw failed;
     return { accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, message, nonce: toBase64(nonce), callbackUrl };
   } catch (e) {

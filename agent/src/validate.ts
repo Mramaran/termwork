@@ -1,4 +1,4 @@
-import { MAX_PRS_PER_CONTRIBUTOR, nearToYocto, type MandateView } from "@termwork/shared";
+import { nearToYocto, type MandateView } from "@termwork/shared";
 import type { PullRequestFact } from "./sources/types.js";
 
 export interface Decision {
@@ -12,9 +12,6 @@ export type Action =
   | { kind: "spend"; recipient: string; amountYocto: string; clauseId: number; evidenceUrl: string }
   | { kind: "request"; recipient: string; amountYocto: string; clauseId: number; evidenceUrl: string; rationale: string }
   | { kind: "log"; clauseId: number; summary: string; evidenceUrl: string };
-
-/** Clause 4 limit, without the "skipped: " prefix. */
-export const OVER_LIMIT = `contributor already has ${MAX_PRS_PER_CONTRIBUTOR} merged pull requests in this review window`;
 
 /** Returns the first balanced {...} substring (string-literal aware), or null. */
 function firstBalanced(raw: string): string | null {
@@ -70,7 +67,6 @@ export async function validate(
 
     if ("error" in d) return log(1, `rejected decision: ${d.error}`);
     if (paid.has(pr.url)) return log(4, "skipped: already paid for this pull request");
-    if ((pr.earlierInWindow ?? 0) >= MAX_PRS_PER_CONTRIBUTOR) return log(4, `skipped: ${OVER_LIMIT}`);
     if (!pr.nearAccount) return log(4, "skipped: no NEAR account in pull request");
     if (!d.qualifies) return log(byId(d.clause_id) ? d.clause_id : 1, `skipped: ${d.rationale}`);
 

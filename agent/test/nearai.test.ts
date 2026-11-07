@@ -207,4 +207,10 @@ describe("complete request body", () => {
     await complete(msgs, "k", opts);
     expect(JSON.parse((fn as any).reqBody).reasoning_effort).toBe("none");
   });
+
+  it("asks for temperature 0 so the same pull request gets the same decision", async () => {
+    const { fn } = mockNet();
+    await complete(msgs, "k", opts);
+    expect(JSON.parse((fn as any).reqBody).temperature).toBe(0);
+  });
 });

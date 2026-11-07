@@ -1,4 +1,3 @@
-import { OVER_LIMIT } from "../../agent/src/validate";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD, type LogEntry, type MandateView, type SpendRequest } from "@termwork/shared";
 import { GitHubError } from "../../agent/src/sources/github";
@@ -87,19 +86,6 @@ describe("/api/analyse", () => {
   it("non-payable repo: a repeat author is decided like anyone else", async () => {
     const r = await handle(post(), mk([pr(1), pr(2, { firstTime: false })]));
     expect(body(r).rows[1]).toMatchObject({ status: "would_pay", amountNear: "0.2" });
-  });
-
-  it("non-payable repo: an author's third merged PR in the window is skipped without a model call", async () => {
-    let calls = 0;
-    const d = mk([pr(1, { earlierInWindow: 2 })]);
-    const inner = d.complete;
-    d.complete = (async (...args: Parameters<typeof inner>) => {
-      calls++;
-      return inner(...args);
-    }) as typeof inner;
-    const r = await handle(post(), d);
-    expect(body(r).rows[0]).toMatchObject({ status: "skipped", reason: OVER_LIMIT, amountNear: null });
-    expect(calls).toBe(0);
   });
 
   it("non-payable repo: a model rejection is skipped with its reason", async () => {

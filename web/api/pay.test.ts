@@ -1,4 +1,3 @@
-import { OVER_LIMIT } from "../../agent/src/validate";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD, type LogEntry, type MandateView, type SpendRequest } from "@termwork/shared";
 import { OutcomeUnknownError } from "../../signer/src/ops";
@@ -249,20 +248,6 @@ describe("/api/pay", () => {
     expect(body(r).kind).toBe("skip");
     expect(body(r).reason).toContain("does not exist");
     expect(noOps(d)).toBe(true);
-  });
-
-  it("an author's third merged PR in the window gives a skip", async () => {
-    const d = mk({ pr: fact({ earlierInWindow: 2 }) });
-    const r = await handle(post(), d);
-    expect(body(r)).toEqual({ kind: "skip", reason: `skipped: ${OVER_LIMIT}` });
-    expect(noOps(d)).toBe(true);
-  });
-
-  it("asks GitHub for the PR with the range start as the window", async () => {
-    let seen: unknown;
-    const d = mk({ getMergedPr: (async (_r: string, _n: number, o: unknown) => { seen = o; return fact(); }) as unknown as PayDeps["getMergedPr"] });
-    await handle(post(), d);
-    expect(seen).toMatchObject({ windowStart: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
   });
 
   it("already paid in work log gives 409", async () => {

@@ -1,4 +1,3 @@
-import { OVER_LIMIT } from "../src/validate.js";
 import { describe, it, expect } from "vitest";
 import type { MandateView } from "@termwork/shared";
 import { parseDecision, validate, type Decision } from "../src/validate.js";
@@ -73,14 +72,6 @@ describe("validate", () => {
   it("repeat author is paid like anyone else", async () => {
     const a = await validate(dec(), { ...pr5, nearAccount: "alice.testnet" }, mandate, new Set(), yes);
     expect(a).toMatchObject({ kind: "spend" });
-  });
-  it("second merged PR in the window is still allowed", async () => {
-    const a = await validate(dec(), { ...pr1, earlierInWindow: 1 }, mandate, new Set(), yes);
-    expect(a).toMatchObject({ kind: "spend" });
-  });
-  it("third merged PR in the window → log skip under clause 4", async () => {
-    const a = await validate(dec(), { ...pr1, earlierInWindow: 2 }, mandate, new Set(), yes);
-    expect(a).toEqual({ kind: "log", clauseId: 4, summary: `skipped: ${OVER_LIMIT}`, evidenceUrl: pr1.url });
   });
   it("already paid → log skip", async () => {
     const a = await validate(dec(), pr1, mandate, new Set([pr1.url]), yes);

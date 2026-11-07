@@ -3,7 +3,17 @@ import { AUTH_ACTION, AUTH_RECIPIENT, type CouncilProof } from "./authConst";
 import { DAO_ID, VOTE_GAS, voteArgs } from "./chain";
 
 /** Wallet Selector is loaded lazily so the page renders (read-only) even if the wallet bundle fails. */
-async function selector() {
+let selectorPromise: ReturnType<typeof makeSelector> | null = null;
+/** One Wallet Selector per page: rebuilding it on every call is slow enough that browsers block the wallet's popup. */
+function selector() {
+  if (!selectorPromise)
+    selectorPromise = makeSelector().catch((e) => {
+      selectorPromise = null;
+      throw e;
+    });
+  return selectorPromise;
+}
+async function makeSelector() {
   const [{ setupWalletSelector }, { setupMyNearWallet }, { setupIntearWallet }] = await Promise.all([
     import("@near-wallet-selector/core"),
     import("@near-wallet-selector/my-near-wallet"),
@@ -62,7 +72,8 @@ export async function signCouncilMessage(): Promise<CouncilProof> {
     const signed = await wallet.signMessage({ message, recipient: AUTH_RECIPIENT, nonce: nonce as unknown as Buffer, callbackUrl });
     if (!signed) throw failed;
     return { accountId: signed.accountId, publicKey: signed.publicKey, signature: signed.signature, message, nonce: toBase64(nonce), callbackUrl };
-  } catch {
-    throw failed;
+  } catch (e) {
+    const why = e instanceof Error && e !== failed && e.message ? e.message : "";
+    throw why ? new Error(`Your wallet did not sign the message: ${why}. If a popup was blocked, allow popups for this site and try again.`) : failed;
   }
 }

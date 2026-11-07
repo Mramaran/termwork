@@ -142,6 +142,17 @@ async function decidedRow(p: PullRequestFact, mandate: MandateView, deps: Analys
     : { ...b, status: "unclaimed", amountNear, reason: "no NEAR account in the pull request", receiptHash: out.hash, proposalId: null };
 }
 
+export const EST_DIRECT = "estimate: the agent pays this directly";
+export const EST_VOTE = "estimate: goes to a DAO vote";
+
+/** Folds a model estimate into a ready row. An AI failure keeps the row ready with no amount; a rule or model refusal shows as skipped. */
+function estimateRow(ready: Row, d: Row): Row {
+  if (d.status === "would_pay")
+    return { ...ready, amountNear: d.amountNear, reason: d.reason === "would go to a DAO vote" ? EST_VOTE : EST_DIRECT, receiptHash: d.receiptHash };
+  if (d.status === "skipped" && d.reason !== "the AI request failed") return { ...d, status: "skipped" };
+  return ready;
+}
+
 async function run(req: HandleReq, deps: AnalyseDeps): Promise<HandleRes> {
   if (req.method !== "POST") return { status: 405, json: { error: "use POST" }, headers: { Allow: "POST" } };
   if (req.oversized || new TextEncoder().encode(req.body).length > MAX_BODY) return { status: 413, json: { error: "request body too large (max 1024 bytes)" } };
@@ -192,6 +203,16 @@ async function run(req: HandleReq, deps: AnalyseDeps): Promise<HandleRes> {
       const paid = new Map(log.filter((e) => (e.kind === "Paid" || e.kind === "PaidApproved") && e.evidence_url).map((e) => [e.evidence_url!, e]));
       const pending = new Map(requests.filter((q) => q.state === "Pending").map((q) => [q.evidence_url, q]));
       rows = listed.prs.map((p) => payableRow(p, paid, pending));
+      // Ready rows get the AI's estimate so the amount shows before paying. /api/pay decides again and that decision pays.
+      if (deps.apiKey && deps.model && rows.some((r) => r.status === "ready")) {
+        const mandate = await deps.getMandate();
+        const stats = { calls: 0, failed: 0 };
+        rows = await mapLimit(
+          rows.map((r, i) => [r, listed.prs[i]!] as const),
+          CONCURRENCY,
+          async ([r, p]) => (r.status === "ready" ? estimateRow(r, await decidedRow(p, mandate, deps, stats)) : r),
+        );
+      }
     } else {
       const mandate = await deps.getMandate();
       const stats = { calls: 0, failed: 0 };

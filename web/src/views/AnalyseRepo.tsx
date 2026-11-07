@@ -169,7 +169,15 @@ export function AnalyseRepo() {
     setError(null);
     try {
       await connect(id);
-      setAccount(await connectedAccount());
+      // Some wallets report the account a moment after sign-in resolves.
+      let acct: string | null = null;
+      for (let i = 0; i < 10 && !acct; i++) {
+        acct = await connectedAccount();
+        if (!acct) await new Promise((r) => setTimeout(r, 500));
+      }
+      setAccount(acct);
+      if (!acct) setError("The wallet did not report an account. Try connecting again.");
+      if (!council) void councilMembers().then(setCouncil, () => setCouncil(null));
     } catch (e) {
       setError((e as Error).message || "Could not connect the wallet.");
     }
@@ -391,7 +399,9 @@ export function AnalyseRepo() {
                 {account ? (
                   <span>
                     Connected as <b>{account}</b>
+                    {council === null && ". The DAO council list could not be read, so payments are off. Reload the page to try again."}
                     {!isCouncil && council && " (not a council member, so you can watch but not pay)"}
+                    {isCouncil && readyRows.length === 0 && ". Nothing in this range is ready to pay."}
                   </span>
                 ) : (
                   <>

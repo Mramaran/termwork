@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD, type LogEntry, type MandateView, type SpendRequest } from "@termwork/shared";
 import { GitHubError } from "../../agent/src/sources/github";
 import type { PullRequestFact } from "../../agent/src/sources/types";
-import { handle, limiter, payableLimiter, type AnalyseDeps } from "./analyse";
+import { EST_DIRECT, EST_VOTE, handle, limiter, payableLimiter, type AnalyseDeps } from "./analyse";
 
 const T0 = Date.parse("2026-11-07T12:00:00Z");
 const mandate: MandateView = {
@@ -109,7 +109,36 @@ describe("/api/analyse", () => {
     expect(body(r).rows[0]).toMatchObject({ status: "skipped", reason: "skipped: too small" });
   });
 
-  it("payable repo: no model call; paid, pending and ready statuses", async () => {
+  it("payable repo: ready rows get the AI's estimate; paid and pending rows make no model call", async () => {
+    const log: LogEntry[] = [
+      { index: 0, kind: "Paid", clause_id: 2, amount: "200000000000000000000000", recipient: "user1.testnet", evidence_url: pr(1).url, receipt_hash: "r1", note: null, timestamp_ms: 1 },
+    ];
+    const big = JSON.stringify({ qualifies: true, clause_id: 3, amount_near: "0.5", rationale: "feature" });
+    const c = (async (msgs: { content: string }[]) => ({ text: msgs[1]!.content.includes("PR 3") ? big : decision, receipt: {}, hash: "h" })) as unknown as AnalyseDeps["complete"];
+    const d = mk([pr(1), pr(2), pr(3)], { payable: new Set(["o/r"]), getWorkLog: async () => log, complete: c });
+    const rows = body(await handle(post(), d)).rows;
+    expect(rows[0]).toMatchObject({ status: "paid", amountNear: "0.2" });
+    expect(rows[1]).toMatchObject({ status: "ready", amountNear: "0.2", reason: EST_DIRECT });
+    expect(rows[2]).toMatchObject({ status: "ready", amountNear: "0.5", reason: EST_VOTE });
+  });
+
+  it("payable repo: a model refusal shows as skipped; an AI failure keeps the row ready", async () => {
+    const no = JSON.stringify({ qualifies: false, clause_id: 1, amount_near: "0", rationale: "trivial change" });
+    const c = (async (msgs: { content: string }[]) => {
+      if (msgs[1]!.content.includes("PR 2")) throw new Error("upstream down");
+      return { text: no, receipt: {}, hash: "h" };
+    }) as unknown as AnalyseDeps["complete"];
+    const errs = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const rows = body(await handle(post(), mk([pr(1), pr(2)], { payable: new Set(["o/r"]), complete: c }))).rows;
+      expect(rows[0]).toMatchObject({ status: "skipped", reason: "skipped: trivial change", amountNear: null });
+      expect(rows[1]).toMatchObject({ status: "ready", reason: "ready to pay", amountNear: null });
+    } finally {
+      errs.mockRestore();
+    }
+  });
+
+  it("payable repo without AI configured: no model call; paid, pending and ready statuses", async () => {
     const log: LogEntry[] = [
       { index: 0, kind: "Paid", clause_id: 2, amount: "200000000000000000000000", recipient: "user1.testnet", evidence_url: pr(1).url, receipt_hash: "r1", note: null, timestamp_ms: 1 },
       { index: 1, kind: "PaidApproved", clause_id: 2, amount: "300000000000000000000000", recipient: "user2.testnet", evidence_url: pr(2).url, receipt_hash: "r2", note: null, timestamp_ms: 2 },
@@ -122,6 +151,7 @@ describe("/api/analyse", () => {
       payable: new Set(["o/r"]),
       getWorkLog: async () => log,
       getRequests: async () => reqs,
+      apiKey: "",
     });
     const r = await handle(post(), d);
     expect(d.calls.complete).toBe(0);

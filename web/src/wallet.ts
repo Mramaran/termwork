@@ -36,7 +36,7 @@ export async function disconnect(): Promise<void> {
 }
 
 /** Calls the Sputnik DAO act_proposal and returns the transaction hash, or null when the wallet gives none. The wallet asks for approval. */
-export async function vote(id: number, approve: boolean): Promise<string> {
+export async function vote(id: number, approve: boolean): Promise<string | null> {
   const s = await selector();
   const wallet = await s.wallet();
   const outcome = await wallet.signAndSendTransaction({
@@ -44,8 +44,7 @@ export async function vote(id: number, approve: boolean): Promise<string> {
     actions: [actionCreators.functionCall("act_proposal", voteArgs(id, approve), BigInt(VOTE_GAS), 0n)],
   });
   const hash = outcome?.transaction?.hash;
-  if (typeof hash !== "string") throw new Error("Your wallet did not return the transaction hash.");
-  return hash;
+  return typeof hash === "string" ? hash : null;
 }
 
 const toBase64 = (b: Uint8Array): string => btoa(String.fromCharCode(...b));

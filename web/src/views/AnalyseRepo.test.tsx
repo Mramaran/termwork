@@ -6,7 +6,7 @@ const wallet = vi.hoisted(() => ({
   connect: vi.fn(async () => undefined),
   connectedAccount: vi.fn(async (): Promise<string | null> => null),
   signCouncilMessage: vi.fn(async () => ({ accountId: "me.testnet", proof: true }) as never),
-  vote: vi.fn(async () => "HASH1"),
+  vote: vi.fn(async (): Promise<string | null> => "HASH1"),
 }));
 const chain = vi.hoisted(() => ({
   councilMembers: vi.fn(async (): Promise<string[]> => ["me.testnet"]),
@@ -271,7 +271,7 @@ describe("AnalyseRepo", () => {
 
   it("Approve & pay with no hash skips the label and says the vote was sent", async () => {
     wallet.connectedAccount.mockResolvedValue("me.testnet");
-    wallet.vote.mockResolvedValue(null as never);
+    wallet.vote.mockResolvedValue(null);
     const pending = [row({ number: 9, status: "pending", amountNear: "2", proposalId: 12 })];
     const calls = mockApi({ analyse: [ok(pending), ok(pending)] });
     render(<AnalyseRepo />);

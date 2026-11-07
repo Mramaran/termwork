@@ -124,6 +124,60 @@ describe("listMergedInRange", () => {
     expect(r.prs.map((p) => p.number)).toEqual([2]);
   });
 
+  it("search hits but every detail request failing throws a 502 GitHubError", async () => {
+    const f = (async (url: string) => {
+      const u = String(url);
+      if (u.includes("/search/issues")) return resp({ total_count: 2, items: [{ number: 1 }, { number: 2 }] });
+      return resp({}, 500);
+    }) as unknown as typeof fetch;
+    const err = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: f }).catch((e) => e);
+    expect(err).toBeInstanceOf(GitHubError);
+    expect(err.status).toBe(502);
+    expect(err.retryAfterSec).toBeNull();
+    expect(err.message).toBe("GitHub could not return pull request details");
+  });
+
+  it("an empty search is not an outage", async () => {
+    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: fakeFetch({ hits: [], total: 0 }, []) });
+    expect(r.prs).toEqual([]);
+  });
+
+  it("PRs that are unmerged or authorless (no facts, no failures) are not an outage", async () => {
+    const f = (async (url: string) => {
+      const u = String(url);
+      if (u.includes("/search/issues")) return resp({ total_count: 1, items: [{ number: 1 }] });
+      return resp(pull(1, "alice", null, null));
+    }) as unknown as typeof fetch;
+    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: f });
+    expect(r.prs).toEqual([]);
+  });
+
+  it("searches at most 25 distinct authors and drops the rest, flagging capped", async () => {
+    const urls: string[] = [];
+    const hits = Array.from({ length: 30 }, (_, i) => i + 1);
+    const f = (async (url: string) => {
+      const u = String(url);
+      urls.push(u);
+      if (u.includes("author%3A")) return resp({ items: [] });
+      if (u.includes("/search/issues")) return resp({ total_count: 30, items: hits.map((number) => ({ number })) });
+      const n = Number(u.split("/pulls/")[1]);
+      return resp(pull(n, `user${n}`));
+    }) as unknown as typeof fetch;
+    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: f });
+    expect(urls.filter((u) => u.includes("author%3A"))).toHaveLength(25);
+    expect(r.prs).toHaveLength(25);
+    expect(r.prs.map((p) => p.number)).toEqual(hits.slice(0, 25));
+    expect(r.capped).toBe(true);
+    expect(r.total).toBe(30);
+  });
+
+  it("many PRs by few authors do not hit the author cap", async () => {
+    const hits = Array.from({ length: 30 }, (_, i) => i + 1);
+    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: fakeFetch({ hits, total: 30 }, []) });
+    expect(r.prs).toHaveLength(30);
+    expect(r.capped).toBe(false);
+  });
+
   it("404 throws GitHubError status 404", async () => {
     const f = (async () => resp({ message: "Not Found" }, 404)) as unknown as typeof fetch;
     const err = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: f }).catch((e) => e);

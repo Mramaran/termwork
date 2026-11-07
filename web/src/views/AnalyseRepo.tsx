@@ -173,6 +173,8 @@ export function AnalyseRepo() {
             const msg = typeof data?.error === "string" ? data.error : "";
             const perRow = status === 404 || (status === 409 && msg === DUPLICATE);
             if (!perRow) break;
+          } else if (data?.kind === "skip") {
+            failures.push(`PR #${r.number}: skipped · ${typeof data.reason === "string" ? data.reason : "no reason given"}`);
           }
         } catch {
           failures.push(OFFLINE);

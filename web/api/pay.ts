@@ -49,6 +49,7 @@ export const limiter = makeLimiter(30, 100);
 const MAX_BODY = 4096;
 const FIELDS = new Set(["repo", "number", "range", "proof"]);
 const DUPLICATE = "already paid or pending";
+const NOT_ACTIVE = "The agent is not active (expired or fired).";
 
 const MAX_RATIONALE_BYTES = 2048;
 const RPC_CHECK_PREFIX = "recipient check failed (rpc)";
@@ -75,7 +76,8 @@ function sendFailure(e: unknown, secrets: string[]): HandleRes {
   if (e instanceof OutcomeUnknownError) return { status: 504, json: { error: "outcome unknown, refresh before retrying" } };
   const msg = e instanceof Error ? e.message : String(e);
   if (/already paid/i.test(msg)) return { status: 409, json: { error: DUPLICATE } };
-  if (/not active|term ended/i.test(msg)) return { status: 409, json: { error: "The agent is not active (expired or fired)." } };
+  // fire() and expiry delete the agent's access key, so signing fails with a missing-key error.
+  if (/not active|term ended|access key|AccessKeyDoesNotExist/i.test(msg)) return { status: 409, json: { error: NOT_ACTIVE } };
   if (/insufficient budget/i.test(msg)) return { status: 409, json: { error: "The agent's budget is used up." } };
   console.error(`pay: send failed: ${errText(e, secrets)}`);
   return { status: 502, json: { error: "The payment could not be sent. Try again in a minute." } };
@@ -140,6 +142,9 @@ async function run(req: HandleReq, deps: PayDeps): Promise<HandleRes> {
     return { status: 502, json: { error: "The chain could not be read. Try again in a minute." } };
   }
   if (handled.has(pr.url)) return { status: 409, json: { error: DUPLICATE } };
+
+  // A fired or expired agent has no access key left, so there is nothing to sign with.
+  if (mandate.status !== "Active" || mandate.term_end_ms <= deps.now()) return { status: 409, json: { error: NOT_ACTIVE } };
 
   let out: Awaited<ReturnType<typeof complete>>;
   try {

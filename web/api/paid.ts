@@ -1,5 +1,4 @@
 import { testnetRpcUrl, type LogEntry } from "@termwork/shared";
-import { getMergedPr } from "../../agent/src/sources/github";
 import { findPaidTx } from "./_lib/github-write";
 import { nodeHandler, scrub, type HandleReq, type HandleRes } from "./_lib/http";
 import { payableRepos } from "./_lib/input";
@@ -38,6 +37,20 @@ export const limiter = makeLimiter(20, 2000);
 const CACHE_MS = 30_000;
 const CONCURRENCY = 5;
 const PR_URL_RE = /^https:\/\/github\.com\/([A-Za-z\d-]+)\/([A-Za-z\d._-]+)\/pull\/(\d{1,10})$/;
+
+/** PR title from the plain pulls endpoint (core quota, not the search quota that /api/pay needs). Null on any failure. */
+export async function fetchTitle(repo: string, number: number, opts: { token?: string; fetchFn?: typeof fetch } = {}): Promise<string | null> {
+  const headers: Record<string, string> = { Accept: "application/vnd.github+json", "User-Agent": "termwork-agent" };
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
+  try {
+    const res = await (opts.fetchFn ?? fetch)(`https://api.github.com/repos/${repo}/pulls/${number}`, { headers });
+    if (!res.ok) return null;
+    const title = ((await res.json()) as { title?: unknown }).title;
+    return typeof title === "string" ? title : null;
+  } catch {
+    return null;
+  }
+}
 
 let cache: { at: number; mandateId: string; items: PaidItem[] } | null = null;
 
@@ -130,7 +143,7 @@ export default nodeHandler(
     return handle(req, {
       getWorkLog: () => getWorkLog(near, mandateId),
       findPaidTx: (repo, number) => findPaidTx(repo, number, { token }),
-      getTitle: async (repo, number) => (await getMergedPr(repo, number, { token }))?.title ?? null,
+      getTitle: (repo, number) => fetchTitle(repo, number, { token }),
       now: () => Date.now(),
       payable: payableRepos(env.PAYABLE_REPOS),
       mandateId,

@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD, type LogEntry, type MandateView, type SpendRequest } from "@termwork/shared";
 import { GitHubError } from "../../agent/src/sources/github";
 import type { PullRequestFact } from "../../agent/src/sources/types";
-import { handle, limiter, type AnalyseDeps } from "./analyse";
+import { handle, limiter, payableLimiter, type AnalyseDeps } from "./analyse";
 
 const T0 = Date.parse("2026-11-07T12:00:00Z");
 const mandate: MandateView = {
@@ -64,7 +64,10 @@ const throwing = (e: unknown) => async (): Promise<never> => {
   throw e;
 };
 
-beforeEach(() => limiter.reset());
+beforeEach(() => {
+  limiter.reset();
+  payableLimiter.reset();
+});
 
 describe("/api/analyse", () => {
   it("non-payable repo: first-timer with account would pay", async () => {
@@ -171,6 +174,24 @@ describe("/api/analyse", () => {
     const r = await handle(post(), d);
     expect(r.status).toBe(429);
     expect(body(r).retryAfterSec).toBeGreaterThan(0);
+  });
+
+  it("payable repo: three requests a minute from one IP all succeed (own, larger limit)", async () => {
+    const d = mk([pr(1)], { payable: new Set(["o/r"]) });
+    for (let i = 0; i < 3; i++) expect((await handle(post(), d)).status).toBe(200);
+  });
+
+  it("payable repo does not use up the non-payable limit", async () => {
+    const pay = mk([pr(1)], { payable: new Set(["o/r"]) });
+    for (let i = 0; i < 3; i++) await handle(post(), pay);
+    const other = mk([pr(1)]);
+    expect((await handle(post({ repo: "x/y", range: { preset: "week" } }), other)).status).toBe(200);
+  });
+
+  it("GitHub outage after a non-empty search gives 502 with its message", async () => {
+    const r = await handle(post(), mk([], { listMergedInRange: throwing(new GitHubError(502, null, "GitHub could not return pull request details")) }));
+    expect(r.status).toBe(502);
+    expect(body(r).error).toBe("GitHub could not return pull request details");
   });
 
   it("503 when the mandate is not configured, or the model is missing for a non-payable repo", async () => {

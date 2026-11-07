@@ -238,6 +238,21 @@ describe("AnalyseRepo", () => {
     expect(callsTo(calls, "/api/pay").map((c) => c.body!.number)).toEqual([7, 9]);
   });
 
+  it("a skip answer from /api/pay is listed and the run continues", async () => {
+    wallet.connectedAccount.mockResolvedValue("me.testnet");
+    const rows = [row({ number: 7 }), row({ number: 9 })];
+    const calls = mockApi({
+      analyse: [ok(rows), ok(rows)],
+      pay: (b) => (b.number === 7 ? { status: 200, body: { kind: "skip", reason: "account does not exist" } } : { status: 200, body: { kind: "spend", txHash: "H" } }),
+    });
+    render(<AnalyseRepo />);
+    typeRepo("o/r");
+    analyse();
+    fireEvent.click(await screen.findByRole("button", { name: "Run payments" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("PR #7: skipped · account does not exist");
+    expect(callsTo(calls, "/api/pay").map((c) => c.body!.number)).toEqual([7, 9]);
+  });
+
   it("a global 409 stops the run", async () => {
     wallet.connectedAccount.mockResolvedValue("me.testnet");
     const rows = [row({ number: 7 }), row({ number: 9 })];

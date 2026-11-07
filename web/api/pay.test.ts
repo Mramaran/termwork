@@ -321,6 +321,37 @@ describe("/api/pay", () => {
     }
   });
 
+  it("an inactive or expired agent gives 409 before any model or ops call", async () => {
+    const cases: MandateView[] = [
+      { ...mandate, status: "Fired" as MandateView["status"] },
+      { ...mandate, term_end_ms: T0 },
+      { ...mandate, term_end_ms: T0 - 1 },
+    ];
+    for (const m of cases) {
+      let completes = 0;
+      const d = mk({
+        getMandate: async () => m,
+        complete: (async () => {
+          completes++;
+          return { text: decision("0.2", 2), receipt: RECEIPT, hash: "rh1" };
+        }) as unknown as PayDeps["complete"],
+      });
+      const r = await handle(post(), d);
+      expect(r.status).toBe(409);
+      expect(body(r).error).toBe("The agent is not active (expired or fired).");
+      expect(completes).toBe(0);
+      expect(noOps(d)).toBe(true);
+    }
+  });
+
+  it("a missing access key at send time gives 409", async () => {
+    for (const msg of ["AccessKeyDoesNotExist { account_id: x }", "Can not sign transactions: no access key found"]) {
+      const r = await handle(post(), mk({ opsError: new Error(msg) }));
+      expect(r.status).toBe(409);
+      expect(body(r).error).toBe("The agent is not active (expired or fired).");
+    }
+  });
+
   it("OutcomeUnknownError gives 504", async () => {
     const r = await handle(post(), mk({ opsError: new OutcomeUnknownError() }));
     expect(r.status).toBe(504);

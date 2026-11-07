@@ -48,10 +48,16 @@ function retryAfterOf(res: Response): number | null {
   return null;
 }
 
+/** Raised internally when a run would exceed its per-run author search budget. */
+class AuthorCapError extends Error {}
+
+/** GitHub allows 30 searches a minute; one is the range search, so keep author searches well under it. */
+const MAX_AUTHOR_SEARCHES = 25;
+
 const isRateLimit = (e: unknown): boolean => e instanceof GitHubError && (e.retryAfterSec !== null || e.status === 429);
 
 /** Shared GitHub REST helpers: authenticated GET and the per-run prior-merged cache. */
-function githubClient(repo: string, fetchFn: FetchFn, token: string | undefined) {
+function githubClient(repo: string, fetchFn: FetchFn, token: string | undefined, maxAuthors = Infinity) {
   const headers: Record<string, string> = { Accept: "application/vnd.github+json", "User-Agent": "termwork-agent" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -66,6 +72,7 @@ function githubClient(repo: string, fetchFn: FetchFn, token: string | undefined)
   function mergedTimes(author: string): Promise<string[]> {
     let hit = cache.get(author);
     if (!hit) {
+      if (cache.size >= maxAuthors) return Promise.reject(new AuthorCapError());
       const q = encodeURIComponent(`repo:${repo} is:pr is:merged author:${author}`);
       hit = get<{ items: Array<{ pull_request?: { merged_at?: string | null } }> }>(
         `https://api.github.com/search/issues?q=${q}&per_page=100`,
@@ -137,22 +144,30 @@ export async function listMergedInRange(
   opts: ReadOpts & { cap?: number } = {},
 ): Promise<RangeResult> {
   const cap = opts.cap ?? 30;
-  const gh = githubClient(repo, opts.fetchFn ?? fetch, opts.token);
+  const gh = githubClient(repo, opts.fetchFn ?? fetch, opts.token, MAX_AUTHOR_SEARCHES);
   const q = encodeURIComponent(`repo:${repo} is:pr is:merged merged:${from}..${to}`);
   const search = await gh.get<{ total_count: number; items: Array<{ number: number }> }>(
     `https://api.github.com/search/issues?q=${q}&per_page=${cap}`,
   );
   const prs: PullRequestFact[] = [];
+  let failures = 0;
+  let overAuthorCap = false;
   for (const hit of search.items.slice(0, cap)) {
     try {
       const fact = await gh.factFor(hit.number);
       if (fact) prs.push(fact);
     } catch (e) {
+      if (e instanceof AuthorCapError) {
+        overAuthorCap = true;
+        continue;
+      }
       if (isRateLimit(e)) throw e;
+      failures++;
       // facts for this PR could not be fetched; skip it and keep going
     }
   }
-  return { prs, total: search.total_count, capped: search.total_count > cap };
+  if (prs.length === 0 && failures > 0 && !overAuthorCap) throw new GitHubError(502, null, "GitHub could not return pull request details");
+  return { prs, total: search.total_count, capped: search.total_count > cap || overAuthorCap };
 }
 
 /** Facts for one merged PR, or null when it does not exist or is not merged. */

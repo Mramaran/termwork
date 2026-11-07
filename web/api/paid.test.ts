@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { LogEntry } from "@termwork/shared";
-import { handle, limiter, resetCache, type PaidDeps } from "./paid";
+import { fetchTitle, handle, limiter, resetCache, type PaidDeps } from "./paid";
 
 const T0 = Date.parse("2026-11-07T12:00:00Z");
 const MANDATE = "mandate.testnet";
@@ -161,5 +161,41 @@ describe("paid", () => {
     for (let i = 0; i < 20; i++) expect((await get(d)).status).toBe(200);
     const r = await get(d);
     expect(r.status).toBe(429);
+  });
+});
+
+describe("fetchTitle", () => {
+  const resp = (body: unknown, status = 200) => ({ ok: status < 300, status, json: async () => body }) as Response;
+
+  it("reads the title with one plain pulls request, using the token", async () => {
+    const seen: Array<{ url: string; auth: string | undefined }> = [];
+    const f = (async (url: string, init?: { headers?: Record<string, string> }) => {
+      seen.push({ url: String(url), auth: init?.headers?.Authorization });
+      return resp({ title: "Fix it" });
+    }) as unknown as typeof fetch;
+    expect(await fetchTitle("o/r", 7, { token: "tok", fetchFn: f })).toBe("Fix it");
+    expect(seen).toEqual([{ url: "https://api.github.com/repos/o/r/pulls/7", auth: "Bearer tok" }]);
+  });
+
+  it("sends no Authorization header without a token", async () => {
+    let auth: string | undefined = "x";
+    const f = (async (_u: string, init?: { headers?: Record<string, string> }) => {
+      auth = init?.headers?.Authorization;
+      return resp({ title: "T" });
+    }) as unknown as typeof fetch;
+    await fetchTitle("o/r", 7, { fetchFn: f });
+    expect(auth).toBeUndefined();
+  });
+
+  it("gives null on an error status, a bad body or a network failure", async () => {
+    expect(await fetchTitle("o/r", 7, { fetchFn: (async () => resp({}, 404)) as unknown as typeof fetch })).toBeNull();
+    expect(await fetchTitle("o/r", 7, { fetchFn: (async () => resp({ title: 5 })) as unknown as typeof fetch })).toBeNull();
+    expect(
+      await fetchTitle("o/r", 7, {
+        fetchFn: (async () => {
+          throw new Error("down");
+        }) as unknown as typeof fetch,
+      }),
+    ).toBeNull();
   });
 });

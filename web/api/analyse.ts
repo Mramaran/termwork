@@ -45,7 +45,10 @@ export type Row = {
   proposalId: number | null;
 };
 
+/** Non-payable path only: each request makes model calls. */
 export const limiter = makeLimiter(2, 100);
+/** Payable path: chain and GitHub reads only, and the UI refreshes it after paying. */
+export const payableLimiter = makeLimiter(20, 1000);
 
 const MAX_BODY = 1024;
 const CONCURRENCY = 5;
@@ -162,7 +165,7 @@ async function run(req: HandleReq, deps: AnalyseDeps): Promise<HandleRes> {
   if (!payable && (!deps.apiKey || !deps.model))
     return { status: 503, json: { error: "The live AI demo isn't configured on this deployment." } };
 
-  const lim = limiter(req.ip, now);
+  const lim = (payable ? payableLimiter : limiter)(req.ip, now);
   if (!lim.ok) return { status: 429, json: { error: "too many requests, slow down", retryAfterSec: lim.retryAfterSec } };
 
   const suggestions = suggestionsFor(repo, deps.payable);
@@ -174,6 +177,7 @@ async function run(req: HandleReq, deps: AnalyseDeps): Promise<HandleRes> {
       if (e.retryAfterSec !== null || e.status === 429)
         return { status: 429, json: { error: "GitHub rate limit reached, try again shortly.", retryAfterSec: e.retryAfterSec ?? 60 } };
       if (e.status === 404) return { status: 404, json: { fit: "not_found", error: "repository not found", suggestions } };
+      if (e.status === 502) return { status: 502, json: { error: e.message } };
     }
     return { status: 502, json: { error: "GitHub could not be read. Try again in a minute." } };
   }

@@ -54,7 +54,11 @@ export async function verifyCouncil(p: unknown, d: { near: NearDeps; daoId: stri
 
     let valid: boolean;
     try {
-      valid = PublicKey.fromString(p.publicKey).verify(nep413Hash(p.message, nonce, AUTH_RECIPIENT, cb), Buffer.from(p.signature, "base64"));
+      const key = PublicKey.fromString(p.publicKey);
+      const sig = Buffer.from(p.signature, "base64");
+      // callbackUrl carries no authority, it is only bound into the hash. Some wallets sign None
+      // even when one is supplied, so accept a signature over either payload.
+      valid = (cb !== undefined && key.verify(nep413Hash(p.message, nonce, AUTH_RECIPIENT, cb), sig)) || key.verify(nep413Hash(p.message, nonce, AUTH_RECIPIENT), sig);
     } catch {
       return fail(BAD_PROOF);
     }

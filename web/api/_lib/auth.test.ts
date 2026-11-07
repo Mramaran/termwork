@@ -67,9 +67,17 @@ describe("verifyCouncil", () => {
     const { callbackUrl: _drop, ...p } = await proof({ callbackUrl: "https://example.app/" });
     expect((await verifyCouncil(p, deps())).ok).toBe(false);
   });
-  it("refuses a proof signed without a callbackUrl but sent with one, or with a different one", async () => {
-    expect((await verifyCouncil({ ...(await proof()), callbackUrl: "https://example.app/" }, deps())).ok).toBe(false);
+  it("accepts a proof signed without a callbackUrl even when one is sent", async () => {
+    const p = { ...(await proof()), callbackUrl: "https://example.app/" };
+    expect(await verifyCouncil(p, deps())).toEqual({ ok: true, accountId: "alice.testnet" });
+  });
+  it("refuses a proof signed over one callbackUrl but sent with a different one", async () => {
     expect((await verifyCouncil({ ...(await proof({ callbackUrl: "https://a.app/" })), callbackUrl: "https://b.app/" }, deps())).ok).toBe(false);
+  });
+  it("refuses a tampered message even with a callbackUrl", async () => {
+    const p = await proof({ callbackUrl: "https://a.app/" });
+    const r = await verifyCouncil({ ...p, message: JSON.stringify({ action: "mission-dao-pay", ts: NOW + 1 }) }, deps());
+    expect(r.ok).toBe(false);
   });
   it("refuses an oversized callbackUrl", async () => {
     const big = "https://e.app/" + "a".repeat(2048);

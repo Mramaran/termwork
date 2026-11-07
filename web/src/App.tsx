@@ -4,6 +4,7 @@ import { loadRun, type RunData } from "./run";
 import { AnalyseRepo } from "./views/AnalyseRepo";
 import { LiveDao } from "./views/LiveDao";
 import { RunYourself } from "./views/RunYourself";
+import { WalletButton } from "./WalletButton";
 import { WatchRun } from "./views/WatchRun";
 
 type Tab = "repo" | "watch" | "yourself";
@@ -84,6 +85,7 @@ export function App() {
           <p className="sub">Hired by vote. Renewed on evidence. Fired on-chain.</p>
         </div>
         <div className="right">
+          <WalletButton />
           <span className="net">
             <span className="dot" aria-hidden="true" />
             NEAR testnet

@@ -312,3 +312,9 @@ table.prs th, table.prs td { text-align: left; padding: 8px 10px; border-bottom:
 .formtitle { grid-column: 1 / -1; }
 .formnote { grid-column: 1 / -1; margin: 0; font-size: 0.9rem; }
 .analyse .wallet-row { margin: 16px 0 0; }
+
+/* Header wallet control */
+.walletbtn { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.walletbtn .acct { display: inline-flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 0.85rem; padding: 8px 14px; border: 1px solid var(--ok); border-radius: var(--r-pill); }
+.walletbtn .acct .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+.walletbtn .err { max-width: 40ch; }

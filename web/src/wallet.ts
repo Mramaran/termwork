@@ -22,6 +22,10 @@ async function makeSelector() {
   return setupWalletSelector({ network: "testnet", modules: [setupIntearWallet(), setupMyNearWallet()] });
 }
 
+/** Fired on window after the wallet connects or disconnects, so every part of the page can re-read the account. */
+export const WALLET_EVENT = "termwork-wallet";
+const announce = () => window.dispatchEvent(new Event(WALLET_EVENT));
+
 export async function connectedAccount(): Promise<string | null> {
   try {
     const s = await selector();
@@ -37,12 +41,16 @@ export async function connect(walletId: WalletId): Promise<void> {
   const s = await selector();
   const wallet = await s.wallet(walletId);
   await wallet.signIn({ contractId: DAO_ID, accounts: [] });
+  // Some wallets report the account a moment after sign-in resolves.
+  for (let i = 0; i < 10 && !(await connectedAccount()); i++) await new Promise((r) => setTimeout(r, 500));
+  announce();
 }
 
 export async function disconnect(): Promise<void> {
   const s = await selector();
   const wallet = await s.wallet();
   await wallet.signOut();
+  announce();
 }
 
 /** Calls the Sputnik DAO act_proposal and returns the transaction hash, or null when the wallet gives none. The wallet asks for approval. */

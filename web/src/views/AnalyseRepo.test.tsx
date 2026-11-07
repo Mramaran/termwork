@@ -7,6 +7,7 @@ const wallet = vi.hoisted(() => ({
   connectedAccount: vi.fn(async (): Promise<string | null> => null),
   signCouncilMessage: vi.fn(async () => ({ accountId: "me.testnet", proof: true }) as never),
   vote: vi.fn(async (): Promise<string | null> => "HASH1"),
+  WALLET_EVENT: "termwork-wallet",
 }));
 const chain = vi.hoisted(() => ({
   councilMembers: vi.fn(async (): Promise<string[]> => ["me.testnet"]),
@@ -168,15 +169,26 @@ describe("AnalyseRepo", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("The AI request failed. Try again in a minute.");
   });
 
+  it("a wallet connected from the header enables Run payments without a reload", async () => {
+    mockApi({ analyse: [ok([row({})])] });
+    render(<AnalyseRepo />);
+    typeRepo("o/r");
+    analyse();
+    await screen.findByText("Ready to pay");
+    expect(screen.queryByRole("button", { name: "Run payments" })).toBeNull();
+    wallet.connectedAccount.mockResolvedValue("me.testnet");
+    window.dispatchEvent(new Event("termwork-wallet"));
+    expect(await screen.findByRole("button", { name: "Run payments" })).toBeTruthy();
+  });
+
   it("one click analyses the demo repo over the last month, with steps shown while it runs", async () => {
     const calls = mockApi({ analyse: [ok([row({})])] });
     render(<AnalyseRepo />);
-    expect(screen.queryByRole("button", { name: "Connect Intear" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Analyse our demo repo" }));
     expect(screen.getByText("Reading merged pull requests from GitHub")).toBeTruthy();
     await screen.findByText("Ready to pay");
     expect(callsTo(calls, "/api/analyse")[0]!.body).toEqual({ repo: DEMO_REPO, range: { preset: "month" } });
-    expect(screen.getByRole("button", { name: "Connect Intear" })).toBeTruthy();
+    expect(screen.getByText(/connect your wallet at the top of the page/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "watch a full term" }).getAttribute("href")).toBe("#watch");
   });
 

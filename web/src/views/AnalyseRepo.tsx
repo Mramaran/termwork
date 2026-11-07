@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { councilMembers, explorerTx } from "../chain";
-import { connect, connectedAccount, signCouncilMessage, vote, type WalletId } from "../wallet";
+import { connectedAccount, signCouncilMessage, vote, WALLET_EVENT } from "../wallet";
 
 type Status = "paid" | "pending" | "ready" | "unclaimed" | "would_pay" | "skipped";
 interface Row {
@@ -88,6 +88,13 @@ export function AnalyseRepo() {
   useEffect(() => {
     void connectedAccount().then(setAccount);
     void councilMembers().then(setCouncil, () => setCouncil(null));
+    // The header's wallet button connects; re-read the account (and retry the council list) when it does.
+    const onWallet = () => {
+      void connectedAccount().then(setAccount);
+      void councilMembers().then(setCouncil, () => setCouncil(null));
+    };
+    window.addEventListener(WALLET_EVENT, onWallet);
+    return () => window.removeEventListener(WALLET_EVENT, onWallet);
   }, []);
 
   const loadPaid = useCallback(async () => {
@@ -163,24 +170,6 @@ export function AnalyseRepo() {
   function useSuggestion(s: string) {
     setRepo(s);
     void runAnalysis(s, currentRange());
-  }
-
-  async function signIn(id: WalletId) {
-    setError(null);
-    try {
-      await connect(id);
-      // Some wallets report the account a moment after sign-in resolves.
-      let acct: string | null = null;
-      for (let i = 0; i < 10 && !acct; i++) {
-        acct = await connectedAccount();
-        if (!acct) await new Promise((r) => setTimeout(r, 500));
-      }
-      setAccount(acct);
-      if (!acct) setError("The wallet did not report an account. Try connecting again.");
-      if (!council) void councilMembers().then(setCouncil, () => setCouncil(null));
-    } catch (e) {
-      setError((e as Error).message || "Could not connect the wallet.");
-    }
   }
 
   const isCouncil = !!account && !!council && council.includes(account);
@@ -404,15 +393,7 @@ export function AnalyseRepo() {
                     {isCouncil && readyRows.length === 0 && ". Nothing in this range is ready to pay."}
                   </span>
                 ) : (
-                  <>
-                    <span className="small">Council members connect a wallet to run payments:</span>
-                    <button type="button" className="btn" onClick={() => void signIn("intear-wallet")}>
-                      Connect Intear
-                    </button>
-                    <button type="button" className="btn" onClick={() => void signIn("my-near-wallet")}>
-                      Connect MyNearWallet
-                    </button>
-                  </>
+                  <span className="small">Council members: connect your wallet at the top of the page to run payments.</span>
                 )}
                 {canRun && (
                   <button type="button" className="btn go" disabled={paying !== null} onClick={() => void runPayments()}>

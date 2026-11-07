@@ -69,9 +69,9 @@ describe("validate", () => {
     const a = await validate(dec({ clause_id: 3, amount_near: "0.5" }), pr4, mandate, new Set(), yes);
     expect(a).toMatchObject({ kind: "request", amountYocto: near(5), clauseId: 3, recipient: "dave-builds.invalid" });
   });
-  it("repeat author → log skip", async () => {
-    const a = await validate(dec(), pr5, mandate, new Set(), yes);
-    expect(a).toMatchObject({ kind: "log", clauseId: 1 });
+  it("repeat author is paid like anyone else", async () => {
+    const a = await validate(dec(), { ...pr5, nearAccount: "alice.testnet" }, mandate, new Set(), yes);
+    expect(a).toMatchObject({ kind: "spend" });
   });
   it("already paid → log skip", async () => {
     const a = await validate(dec(), pr1, mandate, new Set([pr1.url]), yes);

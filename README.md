@@ -36,12 +36,14 @@ Everything runs on NEAR **testnet**; the code refuses any other network. You nee
 
 `npm run -w scripts demo` does steps 2 to 9 in one process, with its own signer and agent loop, and ends with the fire. It takes about 12 minutes and about 30 NEAR of testnet faucet funds (up to 3 faucet accounts via `https://helper.nearprotocol.com`; the faucet rate-limits, and the script says so if it refuses). It deploys the committed wasm unless you built your own (step 3). The agent mode is `AGENT_MODE` from `.env`, else `live` when `NEARAI_API_KEY` is set, else `fixture`. The demo term is 5 minutes (`DEMO_TERM_SECS`).
 
+By default the agent works the made-up PRs in `fixtures/prs.json`. With `DEMO_SOURCE=github` it works the real merged PRs of `DEMO_REPO` (default `Mramaran/mission-dao-demo`) from the last `DEMO_DAYS` days (default 30), paying the accounts in their `near:` lines; set `GITHUB_TOKEN` for the GitHub search limit. The demo makes its own DAO, mandate and agent key, and puts `.termwork-state.json` and `.env` back when it ends, so a live deployment keeps its own agent. Then `npm run -w scripts export-run` turns the run into `web/public/run.json` for the replay.
+
 You see a `PASS` line for each assertion, in this order:
 
 1. The mandate has no access keys after setup.
 2. After `hire`, the agent's function-call key is the only key.
 3. The agent pays merged pull requests, sends the big one to a DAO vote and skips one. In fixture mode the counts are exact (3 paid, 1 request, 1 skip); with a live model they depend on the model.
-4. The DAO votes the big spend down and no money moves.
+4. The DAO votes on each big spend: it approves them and the money moves (`DEMO_BIG_SPEND=reject` votes them down instead, and no money moves).
 5. The agent files its renewal case, and every `[#n]` citation in the report points at a real work-log entry.
 6. The term ends. A late `spend` is sent anyway and fails on-chain with `term ended`.
 7. The DAO votes `fire`, the key list becomes empty, `fire` returns the budget to the DAO, and `sweep` forwards proposal bonds that Sputnik returns after the fire.
@@ -105,7 +107,7 @@ GitHub Pages is not used. Leave `.github/workflows/pages.yml` disabled in the re
 
 - **Mandate contract** (`contracts/mandate`, Rust, near-sdk 5). The DAO calls `hire`, `renew` and `fire` through Sputnik proposals; the contract adds or deletes its own function-call key in response. `spend` pays directly, only within the clause maximum, the spend threshold and the remaining budget (the DAO-voted total, which is the hire deposit plus renewal top-ups, never the account balance), and only once per evidence URL. A larger payment goes through `request_spend`, which opens a DAO proposal. `propose_renewal` stores the agent's report on-chain and opens a renewal proposal; only one can be open per term. After the term, `expire` (agent key or anyone) ends the mandate and deletes the key, and the DAO calls `release` to take the remaining budget back. After a `fire`, anyone can call `sweep` to forward leftover funds to the DAO.
 - **Signer** (`signer`). A local HTTP server on `127.0.0.1` that requires a bearer token and exposes exactly five operations: `spend`, `request_spend`, `log_work`, `propose_renewal`, `expire`. It uses a fresh nonce for every transaction and runs them one at a time. If the RPC times out it answers `504` with "outcome unknown" instead of guessing. It talks only to the testnet RPC hosts on an allowlist.
-- **Agent** (`agent`). Reads merged pull requests from `fixtures/prs.json` (`SOURCE=fixtures`) or the GitHub API (`SOURCE=github`, with `GITHUB_REPO`). For each one it builds a prompt from the mandate, gets a decision from the model, and passes it through a fixed-rule validator (`agent/src/validate.ts`) that turns it into exactly one action: pay, request a vote, or log a skip. For example it skips a pull request that was already paid, has no NEAR account, or is not from a first-time contributor. The agent never signs anything itself.
+- **Agent** (`agent`). Reads merged pull requests from `fixtures/prs.json` (`SOURCE=fixtures`) or the GitHub API (`SOURCE=github`, with `GITHUB_REPO`). For each one it builds a prompt from the mandate, gets a decision from the model, and passes it through a fixed-rule validator (`agent/src/validate.ts`) that turns it into exactly one action: pay, request a vote, or log a skip. For example it skips a pull request that was already paid, or has no NEAR account. The agent never signs anything itself.
 - **Receipts** (`receipts/`). Each model answer is stored as a JSON file named by its SHA-256, and the work-log entry carries that hash.
 - **Web** (`web`). Vite and React reading testnet JSON-RPC directly.
 

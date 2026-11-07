@@ -1,6 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { handle, type DecideDeps } from "./decide";
-import { _resetLimits } from "./limits";
+import { handle, limiter, type DecideDeps } from "./decide";
 
 const SENTINEL = "sk-test-SENTINEL-1234567890";
 const T0 = 1_700_000_000_000;
@@ -25,7 +24,7 @@ function fakeComplete(decision: object): DecideDeps["complete"] {
   })) as DecideDeps["complete"];
 }
 
-const base = { title: "Fix typo", changedLines: 3, feature: false, firstTime: true, nearAccount: "alice.testnet" };
+const base = { title: "Fix crash on empty input", changedLines: 3, feature: false, nearAccount: "alice.testnet" };
 const post = (b: unknown, ip = "1.1.1.1") => ({ method: "POST", body: typeof b === "string" ? b : JSON.stringify(b), ip });
 const deps = (c: DecideDeps["complete"] = fakeComplete({ qualifies: true, clause_id: 2, amount_near: "0.2", rationale: "ok" })): DecideDeps => ({
   complete: c,
@@ -36,7 +35,7 @@ const deps = (c: DecideDeps["complete"] = fakeComplete({ qualifies: true, clause
 });
 
 beforeEach(() => {
-  _resetLimits();
+  limiter.reset();
   process.env.NEARAI_API_KEY = SENTINEL;
 });
 afterEach(() => {
@@ -70,7 +69,7 @@ describe("/api/decide", () => {
   it("rejects invalid json", async () => {
     expect((await handle(post("{nope"), deps())).status).toBe(400);
   });
-  it("small first-time fix → would pay 0.2", async () => {
+  it("small fix → would pay 0.2", async () => {
     const r = await handle(post(base), deps());
     expect(r.status).toBe(200);
     const j = r.json as any;
@@ -88,11 +87,10 @@ describe("/api/decide", () => {
     expect(j.result).toBe("would go to a DAO vote");
     expect(j.amountNear).toBe("0.5");
   });
-  it("repeat contributor → would skip with rule \"first-time contributor\" failing", async () => {
-    const r = await handle(post({ ...base, firstTime: false }), deps());
-    const j = r.json as any;
-    expect(j.result).toBe("would skip");
-    expect(j.rules.find((x: any) => x.rule === "first-time contributor").pass).toBe(false);
+  it("rejects the removed firstTime field", async () => {
+    const r = await handle(post({ ...base, firstTime: true }), deps());
+    expect(r.status).toBe(400);
+    expect(r.json).toMatchObject({ field: "firstTime" });
   });
   it("returns 502 with message when complete() throws, redacting the key", async () => {
     const c = (async () => {
@@ -138,15 +136,15 @@ describe("/api/decide", () => {
     expect(r).toEqual([{ rule: "decision well-formed", pass: false }]);
   });
   it("rules stop at the first failure", async () => {
-    const r = await rulesOf({ qualifies: true, clause_id: 2, amount_near: "0.2", rationale: "x" }, { firstTime: false, nearAccount: "" });
-    expect(r.map((x) => x.rule)).toEqual(["decision well-formed", "model says it qualifies", "first-time contributor"]);
+    const r = await rulesOf({ qualifies: true, clause_id: 2, amount_near: "0.2", rationale: "x" }, { nearAccount: "" });
+    expect(r.map((x) => x.rule)).toEqual(["decision well-formed", "model says it qualifies", "has NEAR account"]);
     expect(r[2]!.pass).toBe(false);
   });
   it("result matches validate for the 3 presets", async () => {
     const cases: [object, object, string][] = [
       [base, { qualifies: true, clause_id: 2, amount_near: "0.2", rationale: "r" }, "would pay"],
       [{ ...base, changedLines: 340, feature: true }, { qualifies: true, clause_id: 3, amount_near: "0.5", rationale: "r" }, "would go to a DAO vote"],
-      [{ ...base, firstTime: false }, { qualifies: true, clause_id: 2, amount_near: "0.2", rationale: "r" }, "would skip"],
+      [{ ...base, title: "docs: fix typo" }, { qualifies: false, clause_id: 1, amount_near: "0", rationale: "trivial" }, "would skip"],
     ];
     for (const [input, d, want] of cases) {
       const j = (await handle(post(input), deps(fakeComplete(d)))).json as any;

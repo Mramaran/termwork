@@ -1,10 +1,10 @@
 import { KeyPair } from "near-api-js";
 import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD } from "@termwork/shared";
-import { ONE_NEAR, isMain, loadState, saveState, setEnv, view, waitFor, type State } from "./chain.js";
+import { isMain, loadState, saveState, near, setEnv, view, waitFor, type State } from "./chain.js";
 import { decide, propose } from "./dao.js";
 
-/** Generates the agent keypair (written to .env as AGENT_PRIVATE_KEY, never printed), proposes `hire` and approves it with 2 council votes. */
-export async function hireAgent(state: State, termSecs: number, log: (s: string) => void = console.log) {
+/** Generates the agent keypair (written to .env as AGENT_PRIVATE_KEY, never printed), proposes `hire` with a budget (default 5 NEAR) and approves it with council votes. */
+export async function hireAgent(state: State, termSecs: number, log: (s: string) => void = console.log, budgetNear = "5") {
   if (!state.mandateId) throw new Error("no mandate deployed; run deploy first");
   const kp = KeyPair.fromRandom("ed25519");
   setEnv({ AGENT_PRIVATE_KEY: kp.toString() });
@@ -16,7 +16,7 @@ export async function hireAgent(state: State, termSecs: number, log: (s: string)
     term_secs: termSecs,
     agent_public_key: state.agentPublicKey,
   };
-  const p = await propose(state, state.members[0]!, "Hire the Contributor Rewards Steward", state.mandateId, "hire", args, 2n * ONE_NEAR);
+  const p = await propose(state, state.members[0]!, "Hire the Contributor Rewards Steward", state.mandateId, "hire", args, near(budgetNear));
   const d = await decide(state, p.id, true);
   const mandate = await waitFor("mandate Active", async () => {
     const m = await view<{ status: string; term_end_ms: number }>(state.mandateId!, "get_mandate");
@@ -27,14 +27,18 @@ export async function hireAgent(state: State, termSecs: number, log: (s: string)
 }
 
 if (isMain(import.meta.url)) {
-  const i = process.argv.indexOf("--term");
-  const term = i >= 0 ? Number(process.argv[i + 1]) : 300;
-  if (!Number.isInteger(term) || term <= 0) {
-    console.error("usage: hire --term <seconds>");
+  const flag = (name: string): string | undefined => {
+    const i = process.argv.indexOf(name);
+    return i >= 0 ? process.argv[i + 1] : undefined;
+  };
+  const term = Number(flag("--term") ?? 2592000);
+  const budget = flag("--budget") ?? "5";
+  if (!Number.isInteger(term) || term <= 0 || !/^\d+(\.\d+)?$/.test(budget) || Number(budget) <= 0) {
+    console.error("usage: hire [--term <seconds, default 2592000>] [--budget <near, default 5>]");
     process.exit(1);
   }
   const state = loadState();
-  hireAgent(state, term)
+  hireAgent(state, term, console.log, budget)
     .then(() => saveState(state))
     .catch((e) => {
       console.error(`hire failed: ${(e as Error).message}`);

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { explorerAccount, explorerTx } from "./chain";
-import { confirmCheck, reportHashMatches, steps, type CheckItem, type FeedLine } from "./run";
+import { confirmCheck, reportedBudgetLeft, reportHashMatches, steps, type CheckItem, type FeedLine } from "./run";
 import { FIXTURE } from "./run.fixture";
 
 const S = steps(FIXTURE);
@@ -70,6 +70,52 @@ describe("steps", () => {
     expect(S.fired.checks.some((c) => c.kind === "live-keys")).toBe(true);
     const rec = S.fired.checks.filter((c) => c.kind === "recorded");
     expect(rec.length).toBeGreaterThan(0);
+  });
+
+  it("vote step lists each approved big spend with its YES vote and payment", () => {
+    const half = (5n * 10n ** 23n).toString();
+    const run = {
+      ...FIXTURE,
+      bigSpends: [
+        { prNumber: 2, prUrl: "https://github.com/o/r/pull/2", requestId: 0, proposalId: 3, amount: half, recipient: "a.testnet", requestTx: "RQ0", voteTxs: ["V0"], approved: true, state: "Approved" },
+        { prNumber: 5, prUrl: "https://github.com/o/r/pull/5", requestId: 1, proposalId: 4, amount: half, recipient: "b.testnet", requestTx: null, voteTxs: ["V1"], approved: true, state: "Approved" },
+      ],
+    };
+    const v = steps(run).vote;
+    expect(texts(v.feed)).toEqual([
+      "PR #2 asked for 0.5 NEAR, over the 0.2 NEAR limit: DAO proposal #3",
+      "The council voted YES (1 vote): 0.5 NEAR paid to a.testnet",
+      "PR #5 asked for 0.5 NEAR, over the 0.2 NEAR limit: DAO proposal #4",
+      "The council voted YES (1 vote): 0.5 NEAR paid to b.testnet",
+    ]);
+    expect(v.checks.map((c) => c.label)).toEqual(["PR #2 request", "PR #2 vote 1 (YES, pays 0.5 NEAR)", "PR #5 request, see on explorer", "PR #5 vote 1 (YES, pays 0.5 NEAR)"]);
+    expect(v.checks[1]!.href).toBe(explorerTx("V0"));
+  });
+
+  it("reads the report's budget left in yoctoNEAR or NEAR", () => {
+    expect(reportedBudgetLeft("Budget left\n1800000000000000000000000 yoctoNEAR\n")).toBe(18n * 10n ** 23n);
+    expect(reportedBudgetLeft("Budget left\n- 3.4 NEAR available")).toBe(34n * 10n ** 23n);
+    expect(reportedBudgetLeft("no such section")).toBeNull();
+  });
+
+  it("flags a report whose budget left disagrees with the contract, and stays quiet when it agrees", () => {
+    const at = (reportText: string) => texts(steps({ ...FIXTURE, renewal: { ...FIXTURE.renewal, reportText }, budget: { ...FIXTURE.budget, availableAtReport: (34n * 10n ** 23n).toString() } }).renew.feed);
+    expect(at("Paid\n...\nBudget left\n1800000000000000000000000 yoctoNEAR\n")).toContain(
+      "The agent's report says 1.8 NEAR is left, but the contract shows 3.4 NEAR available at report time. The contract's figures above are authoritative.",
+    );
+    expect(at("Budget left\n3400000000000000000000000 yoctoNEAR\n").some((t) => t.includes("is left, but the contract"))).toBe(false);
+  });
+
+  it("work feed hides the live site's paid labels and keeps the others", () => {
+    const pr = { ...FIXTURE.prs[0]!, changedLines: 1, labels: ["feature", "💰 paid 0.2 NEAR"] };
+    const line = texts(steps({ ...FIXTURE, prs: [pr] }).work.feed)[0]!;
+    expect(line).toContain("1 changed line, labels: feature,");
+    expect(line).not.toContain("💰");
+  });
+
+  it("the agent key check links the vote that passed the hire, even with one vote", () => {
+    const one = steps({ ...FIXTURE, hire: { ...FIXTURE.hire, voteTxs: ["ONLY"] } });
+    expect(one.hire.checks.find((c) => c.label === "Agent key created")!.href).toBe(explorerTx("ONLY"));
   });
 });
 

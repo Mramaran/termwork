@@ -1,28 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
+import { Logo } from "./Logo";
 import { loadRun, type RunData } from "./run";
+import { AnalyseRepo } from "./views/AnalyseRepo";
 import { LiveDao } from "./views/LiveDao";
 import { RunYourself } from "./views/RunYourself";
-import { TryLive } from "./views/TryLive";
+import { WalletButton } from "./WalletButton";
 import { WatchRun } from "./views/WatchRun";
 
-type Tab = "watch" | "live" | "yourself";
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "watch", label: "Watch our run", icon: "M4 2l10 6-10 6z" },
-  {
-    id: "live",
-    label: "Try the AI live",
-    icon: "M9 1L3 9h5l-1 6 6-8H8z"
-  },
-  {
-    id: "yourself",
-    label: "Run it yourself",
-    icon: "M2 4l4 4-4 4M8 12h6"
-  },
+type Tab = "repo" | "watch" | "yourself";
+const TABS: { id: Tab; label: string; icon: string; stroke: boolean }[] = [
+  { id: "repo", label: "1. Analyse a repo", icon: "M2 3h12M2 8h12M2 13h8", stroke: true },
+  { id: "watch", label: "2. Watch a full term", icon: "M4 2l10 6-10 6z", stroke: false },
+  { id: "yourself", label: "3. Run it yourself", icon: "M2 4l4 4-4 4M8 12h6", stroke: true },
 ];
 
+/** Old links: #live was the AI playground, now folded into the repo analysis. */
 const tabFromHash = (): Tab => {
   const h = window.location.hash.replace(/^#/, "");
-  return h === "live" || h === "yourself" ? h : "watch";
+  return h === "watch" || h === "yourself" ? h : "repo";
 };
 
 type Theme = "dark" | "light";
@@ -82,11 +77,15 @@ export function App() {
     <div className="wrap">
       <header>
         <div>
-          <h1>Termwork</h1>
+          <h1 className="brand">
+            <Logo />
+            Termwork
+          </h1>
           <p className="tag">The AI agent that has to earn its next term.</p>
           <p className="sub">Hired by vote. Renewed on evidence. Fired on-chain.</p>
         </div>
         <div className="right">
+          <WalletButton />
           <span className="net">
             <span className="dot" aria-hidden="true" />
             NEAR testnet
@@ -103,7 +102,7 @@ export function App() {
       <nav className="tabs" aria-label="Views">
         {TABS.map((t) => (
           <a key={t.id} href={`#${t.id}`} aria-current={t.id === tab ? "page" : undefined}>
-            <Icon d={t.icon} stroke={t.id !== "watch"} />
+            <Icon d={t.icon} stroke={t.stroke} />
             {t.label}
           </a>
         ))}
@@ -129,7 +128,12 @@ export function App() {
             <p className="empty">Loading the recorded run</p>
           ))}
         {tab === "watch" && <LiveDao />}
-        {tab === "live" && <TryLive />}
+        {tab === "watch" && (
+          <p className="nextstep">
+            Next: <a href="#yourself">run it yourself</a> with your own DAO and agent on testnet.
+          </p>
+        )}
+        {tab === "repo" && <AnalyseRepo />}
         {tab === "yourself" && <RunYourself />}
       </main>
       <footer>Testnet only. The run was recorded once; the agent-key check reads the chain live.</footer>

@@ -7,11 +7,12 @@ import { realDeps, tick, type LoopDeps } from "../../agent/src/loop.js";
 import { DEFAULT_RECEIPTS_DIR, type InferenceReceipt } from "../../agent/src/receipts.js";
 import { checkCitations } from "../../agent/src/report.js";
 import { fixturesAdapter } from "../../agent/src/sources/fixtures.js";
-import type { SourceAdapter } from "../../agent/src/sources/types.js";
+import { listMergedInRange } from "../../agent/src/sources/github.js";
+import type { PullRequestFact, SourceAdapter } from "../../agent/src/sources/types.js";
 import { accountFactory, buildOps } from "../../signer/src/ops.js";
 import { createSignerServer, listenLocal } from "../../signer/src/server.js";
 import { FaucetLimitError, TESTNET_RPC, accountFor, provider, saveKey } from "./accounts.js";
-import { ROOT, ENV_PATH, accessKeysOf, balanceOf, chainTimeMs, explorerTx, fmtNear, near, saveState, sleep, view, waitFor, type State } from "./chain.js";
+import { ROOT, ENV_PATH, STATE_PATH, accessKeysOf, balanceOf, chainTimeMs, explorerTx, fmtNear, near, saveState, sleep, view, waitFor, type State } from "./chain.js";
 import { decide, setupDao } from "./dao.js";
 import { deployMandate } from "./deploy.js";
 import { fireAgent, sweep } from "./fire.js";
@@ -21,6 +22,24 @@ import { KeyPair } from "near-api-js";
 const TERM_SECS = Number(process.env.DEMO_TERM_SECS ?? 300);
 const TICK_MS = Number(process.env.DEMO_TICK_MS ?? 5000);
 const OUT_PATH = join(ROOT, "demo-output.json");
+/** "fixtures" (made-up PRs, default) or "github": the real merged PRs of DEMO_REPO in the last DEMO_DAYS days. */
+const SOURCE = process.env.DEMO_SOURCE === "github" ? "github" : "fixtures";
+const DEMO_REPO = process.env.DEMO_REPO ?? "Mramaran/mission-dao-demo";
+const DEMO_DAYS = Number(process.env.DEMO_DAYS ?? 30);
+/** What the DAO does with each big-spend request: "approve" (default) or "reject". */
+const BIG_SPEND = process.env.DEMO_BIG_SPEND === "reject" ? "reject" : "approve";
+
+/**
+ * The demo creates its own DAO, mandate and agent key, and those steps overwrite .termwork-state.json and the
+ * .env agent key. The live deployment needs the originals, so they are put back when the demo ends, pass or fail.
+ */
+function protectLiveFiles(): () => void {
+  const saved = [STATE_PATH, ENV_PATH].map((p) => ({ p, text: existsSync(p) ? readFileSync(p, "utf8") : null }));
+  return () => {
+    for (const { p, text } of saved) if (text !== null) writeFileSync(p, text);
+    console.log("  restored .termwork-state.json and .env (the live agent's state and key)");
+  };
+}
 
 const out: {
   startedAt: string;
@@ -33,6 +52,9 @@ const out: {
   agentAttempt?: { result: string; rpcError: string };
   finalAccessKeys?: string[];
   returnedToDaoNear?: string;
+  source?: string;
+  /** The pull requests the agent worked, so export-run can rebuild the replay from the same facts. */
+  prFacts?: PullRequestFact[];
   assertions: string[];
 } = { startedAt: new Date().toISOString(), accounts: {}, proposals: {}, txs: {}, costs: [], assertions: [] };
 
@@ -92,6 +114,18 @@ async function main(): Promise<void> {
   out.mode = mode;
   console.log(`Termwork end-to-end demo on NEAR testnet (agent mode: ${mode}, term ${TERM_SECS}s)`);
   if (mode === "fixture") console.log("  no NEARAI_API_KEY: decisions come from a deterministic rule table, receipts are labelled fixture-rules, unverified");
+  out.source = SOURCE === "github" ? `github:${DEMO_REPO}` : "fixtures";
+
+  // Real PRs are read once up front: the agent ticks every few seconds and GitHub search allows 30 requests a minute.
+  let githubPrs: PullRequestFact[] = [];
+  if (SOURCE === "github") {
+    const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+    const r = await listMergedInRange(DEMO_REPO, day(Date.now() - DEMO_DAYS * 86_400_000), day(Date.now()), { token: process.env.GITHUB_TOKEN || undefined });
+    githubPrs = [...r.prs].sort((a, b) => a.number - b.number);
+    if (githubPrs.length === 0) throw new Error(`no merged pull requests in ${DEMO_REPO} in the last ${DEMO_DAYS} days`);
+    console.log(`  source: ${githubPrs.length} merged PRs from ${DEMO_REPO}: ${githubPrs.map((p) => `#${p.number}`).join(" ")}`);
+    out.prFacts = githubPrs;
+  }
 
   // 1-2. accounts, DAO
   const state: State = await step("1-2. council members (faucet) and the Sputnik DAO", async () => {
@@ -102,8 +136,9 @@ async function main(): Promise<void> {
   out.accounts = { members: state.members, dao: state.daoId, daoExplorer: `https://testnet.nearblocks.io/address/${state.daoId}` };
   const faucetTotal = BigInt(state.members.length) * near("10");
 
-  // contributors: real testnet accounts so the validator's existence check and payments work
-  await step("2b. contributor accounts", async () => {
+  // contributors: real testnet accounts so the validator's existence check and payments work.
+  // Real PRs already name real accounts in their near: line, so this is only for the made-up fixtures.
+  if (SOURCE === "fixtures") await step("2b. contributor accounts", async () => {
     const funder = state.members[2]!;
     const fixtureAccounts = [...new Set((await fixturesAdapter().listMerged()).map((p) => p.nearAccount).filter((a): a is string => !!a))];
     for (const fa of fixtureAccounts) {
@@ -157,11 +192,16 @@ async function main(): Promise<void> {
   });
   const cfg = loadConfig();
   const base = fixturesAdapter();
-  const source: SourceAdapter = {
-    async listMerged() {
-      return (await base.listMerged()).map((p) => ({ ...p, nearAccount: p.nearAccount ? (state.contributors[p.nearAccount] ?? null) : null }));
-    },
-  };
+  const source: SourceAdapter =
+    SOURCE === "github"
+      ? { listMerged: async () => githubPrs }
+      : {
+          async listMerged() {
+            return (await base.listMerged()).map((p) => ({ ...p, nearAccount: p.nearAccount ? (state.contributors[p.nearAccount] ?? null) : null }));
+          },
+        };
+  const prCount = SOURCE === "github" ? githubPrs.length : (await base.listMerged()).length;
+  const recipients = new Set(SOURCE === "github" ? githubPrs.map((p) => p.nearAccount).filter((a): a is string => !!a) : Object.values(state.contributors));
   const deps: LoopDeps = realDeps(cfg, source);
   const runTicks = async (until: () => Promise<boolean>, label: string, timeoutMs: number): Promise<void> => {
     const end = Date.now() + timeoutMs;
@@ -180,46 +220,65 @@ async function main(): Promise<void> {
   };
 
   {
-    // 5. agent works the fixtures
-    await step("5. agent run on fixtures: payments, one big request, one skip", async () => {
+    // 5. agent works the pull requests
+    await step(`5. agent run on ${SOURCE === "github" ? `${prCount} real PRs from ${DEMO_REPO}` : "fixtures"}: payments, big requests, skips`, async () => {
       await runTicks(
         async () => {
           const log = await readLog(mandateId);
           const k = (kind: string) => log.filter((e) => e.kind === kind).length;
           if (mode === "fixture") return k("Paid") >= 3 && k("Requested") >= 1 && k("Work") >= 1;
-          // live: the model decides, so wait until every fixture PR has an outcome on-chain
+          // live: the model decides, so wait until every PR has an outcome on-chain
           const handled = new Set(log.filter((e) => ["Paid", "Requested", "Work"].includes(e.kind)).map((e) => e.evidence_url));
-          return k("Paid") >= 1 && handled.size >= 5;
+          return k("Paid") >= 1 && handled.size >= prCount;
         },
-        "fixture run",
+        "agent run",
         Math.max(60_000, TERM_SECS * 500),
       );
     });
     const log5 = await readLog(mandateId);
     const paid = log5.filter((e) => e.kind === "Paid");
     must(paid.length >= (mode === "fixture" ? 3 : 1), `at least ${mode === "fixture" ? 3 : 1} Paid entries on-chain (${paid.length})`);
-    must(paid.every((e) => e.recipient && Object.values(state.contributors).includes(e.recipient) && e.receipt_hash), "paid entries name a demo contributor and carry a receipt hash");
+    must(paid.every((e) => e.recipient && recipients.has(e.recipient) && e.receipt_hash), "paid entries name a contributor account from the PRs and carry a receipt hash");
     const requested = log5.filter((e) => e.kind === "Requested");
     if (mode === "fixture") {
       // exact counts are only guaranteed for the deterministic rule table
       must(requested.length === 1, "exactly 1 Requested entry (the big reward)");
-      must(log5.some((e) => e.kind === "Work" && (e.note ?? "").includes("not a first-time")), "1 skip logged (not a first-time contributor)");
+      must(log5.some((e) => e.kind === "Work" && (e.note ?? "").includes("trivial")), "1 skip logged (a trivial typo fix)");
     } else console.log(`  live decisions: ${paid.length} Paid, ${requested.length} Requested`);
     for (const e of paid) {
       const r = await balanceOf(e.recipient!);
       must(r >= near("0.2"), `payment landed: ${e.recipient} holds ${fmtNear(r)} NEAR`);
     }
 
-    // 6. the DAO votes the big spend down
-    const req = (await view<SpendRequest[]>(mandateId, "get_requests"))[0];
-    if (req) {
-      must(req.proposal_id !== null, "big-spend request has a DAO proposal id");
-      out.proposals.bigSpend = req.proposal_id!;
-      const rej = await step("6. DAO votes down the big spend", () => decide(state, req.proposal_id!, false));
-      rej.hashes.forEach((h, i) => tx(`bigSpend.reject${i + 1}`, h));
-      must(rej.status === "Rejected", "DAO rejected the big-spend proposal");
-      must((await balanceOf(req.recipient)) < near("0.5"), "rejected big spend moved no money");
-    } else console.log("  no big-spend request this run (the live model chose differently); skipping the vote-down step");
+    // 6. the DAO decides each big-spend request (approve by default, DEMO_BIG_SPEND=reject votes them down)
+    const pendingReqs = (await view<SpendRequest[]>(mandateId, "get_requests")).filter((q) => q.state === "Pending");
+    if (pendingReqs.length === 0) console.log("  no big-spend request this run (the live model chose differently); skipping the vote step");
+    for (const req of pendingReqs) {
+      must(req.proposal_id !== null, `big-spend request ${req.id} has a DAO proposal id`);
+      const approve = BIG_SPEND === "approve";
+      if (out.proposals.bigSpend === undefined) out.proposals.bigSpend = req.proposal_id!;
+      out.proposals[`bigSpend.r${req.id}`] = req.proposal_id!;
+      const before = await balanceOf(req.recipient);
+      const d = await step(`6. DAO ${approve ? "approves" : "votes down"} big spend ${req.id} (${fmtNear(BigInt(req.amount))} NEAR to ${req.recipient})`, () =>
+        decide(state, req.proposal_id!, approve),
+      );
+      // legacy keys (bigSpend.rejectN) keep older run.json builds working; per-request keys carry every vote
+      d.hashes.forEach((h, i) => {
+        tx(`bigSpend.r${req.id}.vote${i + 1}`, h);
+        if (!approve && req.id === pendingReqs[0]!.id) tx(`bigSpend.reject${i + 1}`, h);
+      });
+      if (approve) {
+        must(d.status === "Approved", `DAO approved big spend ${req.id}`);
+        const after = await waitFor(`payment to ${req.recipient}`, async () => {
+          const b = await balanceOf(req.recipient);
+          return b > before ? b : undefined;
+        }, 30_000, 2000);
+        must(after - before >= BigInt(req.amount) - near("0.001"), `approved big spend paid ${fmtNear(after - before)} NEAR to ${req.recipient}`);
+      } else {
+        must(d.status === "Rejected", `DAO rejected big spend ${req.id}`);
+        must((await balanceOf(req.recipient)) - before < near("0.001"), "rejected big spend moved no money");
+      }
+    }
 
     // 7. renewal case
     await step("7. agent files its renewal case", async () => {
@@ -250,7 +309,7 @@ async function main(): Promise<void> {
   // 8. term ends; a late spend lands on-chain and fails with "term ended"
   const late = await step("8. term ends; the agent tries one more payment", async () => {
     await waitFor("the chain clock to pass term end", async () => (await chainTimeMs()) > termEndMs + 3000, TERM_SECS * 1000 + 60_000, 3000);
-    const recipient = Object.values(state.contributors)[0]!;
+    const recipient = [...recipients][0]!;
     const evidence = "https://github.com/termwork/demo/pull/99";
     return postSigner(signerUrl, token, "/spend", {
       recipient,
@@ -291,13 +350,13 @@ async function main(): Promise<void> {
   const returned = daoAfter - daoBeforeFire;
   out.returnedToDaoNear = fmtNear(returned);
   must(returned > 0n, `DAO balance increased (${fmtNear(returned)} NEAR returned)`);
-  const requestAfter = (await view<SpendRequest[]>(mandateId, "get_requests"))[0]!;
-  must(requestAfter.state === "Cancelled", "the rejected request is Cancelled after the fire");
+  const requestsAfter = await view<SpendRequest[]>(mandateId, "get_requests");
+  must(requestsAfter.every((q) => q.state !== "Pending"), "no request is left pending after the fire (approved ones Executed, rejected ones Cancelled)");
 
   // 11. the old key is dead
   const attempt = await step("11. the agent tries again with its old key", () =>
     postSigner(signerUrl, token, "/spend", {
-      recipient: Object.values(state.contributors)[0]!,
+      recipient: [...recipients][0]!,
       amount: near("0.1").toString(),
       clause_id: 2,
       evidence_url: "https://github.com/termwork/demo/pull/100",
@@ -328,9 +387,14 @@ async function main(): Promise<void> {
   console.log(`details written to demo-output.json (${out.assertions.length} assertions passed)`);
 }
 
+const restoreLive = protectLiveFiles();
 main().then(
-  () => process.exit(0),
+  () => {
+    restoreLive();
+    process.exit(0);
+  },
   (e) => {
+    restoreLive();
     try {
       writeFileSync(OUT_PATH, JSON.stringify({ ...out, failed: (e as Error).message }, null, 2));
     } catch {

@@ -6,32 +6,34 @@ import type { PullRequestFact } from "./sources/types.js";
 /** Receipts made in fixture mode name this "model". It is a rule table, not an AI model. */
 export const FIXTURE_MODEL = "fixture-rules";
 
-/** Clause ids of the demo mission (spec section 2): 1 eligibility, 2 standard reward, 3 big reward (vote), 4 never pay twice. */
+/** Clause ids of the demo mission (spec section 2): 1 valid merged PRs, 2 standard reward, 3 big reward (vote), 4 never pay twice. */
 const CLAUSE_STANDARD = 2;
 const CLAUSE_BIG = 3;
 const BIG_LINES = 200;
+/** Titles the rule table treats as trivial changes (clause 1). */
+const TRIVIAL = /\b(typo|whitespace|formatting)\b/i;
 
 /**
  * Deterministic stand-in for the model: applies the mission rules in code.
  * Returns the same strict JSON the model is asked for. No network, no randomness.
  */
 export function fixtureDecision(pr: PullRequestFact): string {
-  if (!pr.firstTime) {
-    return JSON.stringify({ qualifies: false, clause_id: 1, amount_near: "0", rationale: `${pr.author} has an earlier merged pull request, so clause 1 (first-time contributors) does not apply.` });
+  if (TRIVIAL.test(pr.title)) {
+    return JSON.stringify({ qualifies: false, clause_id: 1, amount_near: "0", rationale: `"${pr.title}" is a trivial change, which clause 1 does not count as a valid contribution.` });
   }
   if (pr.labels.includes("feature") || pr.changedLines > BIG_LINES) {
     return JSON.stringify({
       qualifies: true,
       clause_id: CLAUSE_BIG,
       amount_near: "0.5",
-      rationale: `First-time contributor; ${pr.changedLines} changed lines${pr.labels.includes("feature") ? " and a feature label" : ""} make this a larger pull request (clause 3), which needs a DAO vote.`,
+      rationale: `${pr.changedLines} changed lines${pr.labels.includes("feature") ? " and a feature label" : ""} make this a larger pull request (clause 3), which needs a DAO vote.`,
     });
   }
   return JSON.stringify({
     qualifies: true,
     clause_id: CLAUSE_STANDARD,
     amount_near: "0.2",
-    rationale: `First-time contributor with a small merged pull request (${pr.changedLines} changed lines): standard reward under clause 2.`,
+    rationale: `A small merged pull request (${pr.changedLines} changed lines): standard reward under clause 2.`,
   });
 }
 

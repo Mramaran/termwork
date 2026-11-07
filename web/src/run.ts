@@ -41,6 +41,19 @@ export interface RunData {
   hire: { proposalId: number; proposeTx: string; voteTxs: string[] };
   prs: RunPr[];
   bigSpend: { requestId: number; proposalId: number; requestTx: string | null; rejectTxs: string[]; state: string };
+  /** Every big-spend request with the DAO's decision. Absent in runs recorded before approvals were supported. */
+  bigSpends?: {
+    prNumber: number | null;
+    prUrl: string;
+    requestId: number;
+    proposalId: number;
+    amount: string;
+    recipient: string;
+    requestTx: string | null;
+    voteTxs: string[];
+    approved: boolean;
+    state: string;
+  }[];
   renewal: { reportText: string; reportHash: string; logIndex: number; proposalTx: string | null; receiptHash: string; rejectTxs: string[] };
   budget: { total: string; spent: string; availableAtReport: string };
   end: {
@@ -98,7 +111,7 @@ function duration(secs: number): string {
 function hireStep(run: RunData): Step {
   const feed: FeedLine[] = [
     { text: `DAO proposal #${run.hire.proposalId}: hire "${run.mission.title}"`, tone: "info" },
-    { text: `The council approved it with ${run.hire.voteTxs.length} votes`, tone: "ok" },
+    { text: `The council approved it with ${run.hire.voteTxs.length} vote${run.hire.voteTxs.length === 1 ? "" : "s"}`, tone: "ok" },
     ...run.mission.clauses.map((c): FeedLine => ({ text: `Clause ${c.id}: ${c.text}`, tone: "info" })),
     { text: `Budget ${near(run.budget.total)} NEAR, spend limit ${near(run.spendThreshold)} NEAR per payment`, tone: "info" },
     { text: `Term length ${duration(run.termSecs)}`, tone: "info" },
@@ -106,15 +119,29 @@ function hireStep(run: RunData): Step {
   const checks: CheckItem[] = [
     txCheck("Hire proposal", run.hire.proposeTx, run),
     ...run.hire.voteTxs.map((h, i) => txCheck(`Council vote ${i + 1}`, h, run)),
-    txCheck("Agent key created", run.hire.voteTxs[1], run),
+    // the vote that passed the proposal ran hire(), which added the agent's key
+    txCheck("Agent key created", run.hire.voteTxs[run.hire.voteTxs.length - 1], run),
   ];
   return { title: "Hire", feed, checks };
+}
+
+/** PR labels minus the "💰 paid" labels the live site adds after paying, which a recorded run may have read. */
+const shownLabels = (pr: RunPr): string[] => pr.labels.filter((l) => !/^💰 paid\b/.test(l));
+
+/** The "Budget left" figure in the agent's report, in yoctoNEAR (whole yocto, or a NEAR decimal); null if absent. */
+export function reportedBudgetLeft(report: string): bigint | null {
+  const m = /Budget left[^\n\d]*\n?\s*(?:[-*]\s*)?([\d.]+)\s*(yocto)?/i.exec(report);
+  if (!m) return null;
+  const [num, yocto] = [m[1]!, !!m[2]];
+  if (yocto || /^\d{19,}$/.test(num)) return /^\d+$/.test(num) ? BigInt(num) : null;
+  const [w = "0", f = ""] = num.split(".");
+  return BigInt(w) * 10n ** 24n + BigInt(f.padEnd(24, "0").slice(0, 24) || "0");
 }
 
 function prLines(run: RunData, pr: RunPr): FeedLine[] {
   const lines: FeedLine[] = [
     {
-      text: `PR #${pr.number} "${pr.title}": first-time contributor: ${pr.firstTime ? "yes" : "no"}, NEAR account: ${pr.nearAccount ?? "none"}`,
+      text: `PR #${pr.number} "${pr.title}": ${pr.changedLines} changed line${pr.changedLines === 1 ? "" : "s"}${shownLabels(pr).length ? `, labels: ${shownLabels(pr).join(", ")}` : ""}, NEAR account: ${pr.nearAccount ?? "none"}`,
       tone: "info",
     },
   ];
@@ -150,6 +177,27 @@ function workStep(run: RunData): Step {
 }
 
 function voteStep(run: RunData): Step {
+  if (run.bigSpends && run.bigSpends.length > 0) {
+    const feed: FeedLine[] = [];
+    const checks: CheckItem[] = [];
+    for (const b of run.bigSpends) {
+      const pr = `PR #${b.prNumber ?? "?"}`;
+      const votes = `${b.voteTxs.length} vote${b.voteTxs.length === 1 ? "" : "s"}`;
+      feed.push({ text: `${pr} asked for ${near(b.amount)} NEAR, over the ${near(run.spendThreshold)} NEAR limit: DAO proposal #${b.proposalId}`, tone: "info" });
+      feed.push(
+        b.approved
+          ? { text: `The council voted YES (${votes}): ${near(b.amount)} NEAR paid to ${b.recipient}`, tone: "ok" }
+          : { text: `The council voted NO (${votes}): request ${b.state.toLowerCase()}, no money moved`, tone: "bad" },
+      );
+      checks.push(txCheck(`${pr} request`, b.requestTx, run));
+      b.voteTxs.forEach((h, i) => {
+        const last = i === b.voteTxs.length - 1;
+        const label = b.approved ? (last ? `${pr} vote ${i + 1} (YES, pays ${near(b.amount)} NEAR)` : `${pr} vote ${i + 1} (YES)`) : `${pr} vote ${i + 1} (NO)`;
+        checks.push(txCheck(label, h, run));
+      });
+    }
+    return { title: "Vote", feed, checks };
+  }
   const pr = run.prs.find((p) => p.outcome === "requested");
   const feed: FeedLine[] = [
     { text: `PR #${pr?.number ?? "?"} asked for ${near(pr?.amount ?? run.maxRequest)} NEAR, over the ${near(run.spendThreshold)} NEAR limit`, tone: "info" },
@@ -170,11 +218,20 @@ function renewStep(run: RunData): Step {
     { text: "The agent's renewal report, verbatim:", tone: "info" },
     { text: run.renewal.reportText, tone: "info" },
     { text: `On-chain figures: budget ${near(run.budget.total)} NEAR, spent ${near(run.budget.spent)} NEAR, available at report time ${available} NEAR`, tone: "ok" },
-    {
+  ];
+  // A known slip in the first recorded report; only flagged when the report actually makes it.
+  if (/initial budget/i.test(run.renewal.reportText))
+    feed.push({
       text: `The agent's report states amounts in yoctoNEAR and calls the available ${available} NEAR its 'initial budget'. The contract's figures above are authoritative.`,
       tone: "warn",
-    },
-  ];
+    });
+  // Any report whose "Budget left" disagrees with the contract is flagged; the AI writes the report, the contract keeps the books.
+  const claimed = reportedBudgetLeft(run.renewal.reportText);
+  if (claimed !== null && claimed !== BigInt(run.budget.availableAtReport))
+    feed.push({
+      text: `The agent's report says ${near(claimed.toString())} NEAR is left, but the contract shows ${available} NEAR available at report time. The contract's figures above are authoritative.`,
+      tone: "warn",
+    });
   const checks: CheckItem[] = [
     txCheck("Renewal proposal", run.renewal.proposalTx, run),
     { label: "Report hash matches on-chain", href: explorerAccount(run.mandate), kind: "report-hash" },

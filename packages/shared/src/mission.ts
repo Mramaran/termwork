@@ -12,7 +12,7 @@ const near = (s: string): bigint => {
 export const DEMO_MISSION: Mission = {
   title: "Contributor Rewards Steward",
   clauses: [
-    { id: 1, text: "Reward first-time contributors whose pull requests are merged into the repo, within 48 hours of the merge.", max_amount: near("0.5").toString(), pays: true },
+    { id: 1, text: "Reward every valid pull request merged inside the review window the steward is asked to check. A trivial change (a typo, whitespace or formatting only, or an automated bot update) is not valid and earns nothing.", max_amount: near("0.5").toString(), pays: true },
     { id: 2, text: "Standard reward: 0.2 NEAR per qualifying pull request.", max_amount: near("0.2").toString(), pays: true },
     {
       id: 3,

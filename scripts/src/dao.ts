@@ -1,4 +1,4 @@
-import { accountFor, createFundedTestnetAccount } from "./accounts.js";
+import { accountFor, createFundedTestnetAccount, provider } from "./accounts.js";
 import { BOND, FACTORY, ONE_NEAR, TGAS, balanceOf, call, near, setEnv, view, waitFor, type State } from "./chain.js";
 
 export const RANDOM_SUFFIX = (): string => Math.random().toString(16).slice(2, 8);
@@ -10,13 +10,13 @@ export interface ProposalView {
   description: string;
 }
 
-export function sputnikPolicy(members: string[]) {
+export function sputnikPolicy(members: string[], threshold: "1" | "2" = "2") {
   return {
     roles: [
       { name: "all", kind: "Everyone", permissions: ["*:AddProposal"], vote_policy: {} },
       { name: "council", kind: { Group: members }, permissions: ["*:*"], vote_policy: {} },
     ],
-    default_vote_policy: { weight_kind: "RoleWeight", quorum: "0", threshold: "2" },
+    default_vote_policy: { weight_kind: "RoleWeight", quorum: "0", threshold },
     proposal_bond: BOND.toString(),
     proposal_period: "604800000000000",
     bounty_bond: BOND.toString(),
@@ -24,8 +24,23 @@ export function sputnikPolicy(members: string[]) {
   };
 }
 
-/** Creates 3 funded council members (the only faucet accounts) and a 2-of-3 Sputnik DAO with a 0.1 NEAR bond, then tops the DAO up by 3 NEAR. */
+/** Fails fast, before any faucet call, unless `id` is an existing testnet account. */
+async function assertAccountExists(id: string): Promise<void> {
+  try {
+    await provider().viewAccount({ accountId: id, blockQuery: { finality: "final" } });
+  } catch (e) {
+    throw new Error(`COUNCIL_ACCOUNT "${id}" was not found on testnet (${(e as Error).message}). Create it first or fix the name.`);
+  }
+}
+
+/**
+ * Creates 3 funded council members (the only faucet accounts) and a Sputnik DAO with a 0.1 NEAR bond, then tops the DAO up by 6 NEAR
+ * (3 from each of the first two members) so a 5 NEAR hire fits. 2-of-3 by default; when COUNCIL_ACCOUNT is set that account joins the
+ * council and one vote is enough, so its owner can approve alone.
+ */
 export async function setupDao(log: (s: string) => void = console.log): Promise<State> {
+  const councilAccount = process.env.COUNCIL_ACCOUNT?.trim() || undefined;
+  if (councilAccount) await assertAccountExists(councilAccount);
   const suffix = RANDOM_SUFFIX();
   const members: string[] = [];
   for (const n of [1, 2, 3]) {
@@ -34,13 +49,16 @@ export async function setupDao(log: (s: string) => void = console.log): Promise<
     members.push(id);
     log(`  member ${n}: ${id}`);
   }
+  const councilMembers = councilAccount ? [...members, councilAccount] : members;
+  const threshold = councilAccount ? "1" : "2";
   const name = `tw${suffix}`;
   const daoId = `${name}.${FACTORY}`;
-  const args = { config: { name, purpose: "Termwork demo DAO", metadata: "" }, policy: sputnikPolicy(members) };
+  const args = { config: { name, purpose: "Termwork demo DAO", metadata: "" }, policy: sputnikPolicy(councilMembers, threshold) };
   await call(members[0]!, FACTORY, "create", { name, args: Buffer.from(JSON.stringify(args)).toString("base64") }, { deposit: near("6"), gas: 300n * TGAS });
   await waitFor("DAO policy", () => view(daoId, "get_policy"), 60_000);
   await accountFor(members[0]!).transfer({ receiverId: daoId, amount: near("3") });
-  log(`  DAO: ${daoId} (2-of-3, bond 0.1 NEAR), balance ${Number((await balanceOf(daoId)) / (ONE_NEAR / 1000n)) / 1000} NEAR`);
+  await accountFor(members[1]!).transfer({ receiverId: daoId, amount: near("3") });
+  log(`  DAO: ${daoId} (${councilAccount ? `one vote, council includes ${councilAccount}` : "2-of-3"}, bond 0.1 NEAR), balance ${Number((await balanceOf(daoId)) / (ONE_NEAR / 1000n)) / 1000} NEAR`);
   const state: State = { suffix, members, daoId, contributors: {} };
   setEnv({ DAO_ID: daoId, NEAR_NETWORK: "testnet" });
   return state;

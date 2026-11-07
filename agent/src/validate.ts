@@ -67,7 +67,6 @@ export async function validate(
 
     if ("error" in d) return log(1, `rejected decision: ${d.error}`);
     if (paid.has(pr.url)) return log(4, "skipped: already paid for this pull request");
-    if (!pr.firstTime) return log(1, "skipped: not a first-time contributor");
     if (!pr.nearAccount) return log(4, "skipped: no NEAR account in pull request");
     if (!d.qualifies) return log(byId(d.clause_id) ? d.clause_id : 1, `skipped: ${d.rationale}`);
 

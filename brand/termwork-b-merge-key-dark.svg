@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Termwork">
+  <g transform="translate(1.5 2)">
+    <circle cx="17" cy="29" r="9" fill="none" stroke="#ffffff" stroke-width="6"/>
+    <path d="M26 29 H50" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+    <path d="M33 29 V35 A6 6 0 0 0 39 41 H44 A6 6 0 0 0 50 35 V29" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="50" cy="29" r="5.5" fill="#00ec97"/>
+  </g>
+</svg>

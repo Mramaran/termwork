@@ -11,6 +11,7 @@ export function decisionMessages(m: MandateView, pr: PullRequestFact): ChatMessa
     clauses,
     `You only advise. Fixed rules outside your control check your answer and decide whether anything is paid, so never claim to have paid or acted.`,
     `Decide whether the merged pull request below earns a reward under one clause.`,
+    `"Trivial" means only a typo fix, a whitespace or formatting-only change, or an automated bot update. A change to code that fixes a bug or adds behaviour is never trivial, however few lines it changes.`,
     `Output strict JSON and nothing else, matching: {"qualifies": boolean, "clause_id": number, "amount_near": string, "rationale": string}.`,
     `amount_near is a decimal NEAR amount written as a string, for example "0.2". rationale is one or two sentences.`,
   ].join("\n");
@@ -18,7 +19,6 @@ export function decisionMessages(m: MandateView, pr: PullRequestFact): ChatMessa
     url: pr.url,
     title: pr.title,
     author: pr.author,
-    first_time_contributor: pr.firstTime,
     changed_lines: pr.changedLines,
     labels: pr.labels,
     merged_at: pr.mergedAt,

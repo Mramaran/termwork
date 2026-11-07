@@ -44,6 +44,14 @@ const FIT_REASON: Record<string, string> = {
   not_found: "That repository could not be found.",
 };
 
+/** The allowlisted demo repository: real testnet payments happen only here. */
+export const DEMO_REPO = (import.meta.env.VITE_DEMO_REPO as string | undefined) || "Mramaran/mission-dao-demo";
+
+/** What the server does, in order. One request covers all of it, so the steps advance on a timer. */
+const STEPS_PAYABLE = ["Reading merged pull requests from GitHub", "Counting each contributor's merges in the window", "Checking NEAR for payments already made"];
+const STEPS_OTHER = ["Reading merged pull requests from GitHub", "Counting each contributor's merges in the window", "Asking the AI to judge each pull request", "Checking every answer against the fixed rules"];
+const STEP_MS = 1400;
+
 const FAILED = "The request failed. Try again in a minute.";
 const DUPLICATE = "already paid or pending";
 const OFFLINE = "Could not reach the server. Check your connection and try again.";
@@ -74,6 +82,8 @@ export function AnalyseRepo() {
   const [paying, setPaying] = useState<string | null>(null);
   const [paid, setPaid] = useState<PaidItem[]>([]);
   const [paidError, setPaidError] = useState<string | null>(null);
+  const [busyRepo, setBusyRepo] = useState<string | null>(null);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     void connectedAccount().then(setAccount);
@@ -98,13 +108,24 @@ export function AnalyseRepo() {
     void loadPaid();
   }, [loadPaid]);
 
+  const busySteps = busyRepo && busyRepo.toLowerCase() === DEMO_REPO.toLowerCase() ? STEPS_PAYABLE : STEPS_OTHER;
+  useEffect(() => {
+    if (!busyRepo) return;
+    setStep(0);
+    const t = setInterval(() => setStep((n) => Math.min(n + 1, busySteps.length - 1)), STEP_MS);
+    return () => clearInterval(t);
+  }, [busyRepo, busySteps.length]);
+
   const currentRange = (): Range => (preset === "custom" ? { preset, from, to } : { preset });
 
   /** Runs the analysis; returns the error message, or null on success. The message is also shown unless `quiet`. */
   async function runAnalysis(repoText: string, range: Range, quiet = false): Promise<string | null> {
     setBusy(true);
     setError(null);
-    if (!quiet) setResult(null);
+    if (!quiet) {
+      setResult(null);
+      setBusyRepo(repoText);
+    }
     const fail = (msg: string) => {
       if (!quiet) setError(msg);
       return msg;
@@ -124,7 +145,14 @@ export function AnalyseRepo() {
       return fail(OFFLINE);
     } finally {
       setBusy(false);
+      setBusyRepo(null);
     }
+  }
+
+  function analyseDemo() {
+    setRepo(DEMO_REPO);
+    setPreset("month");
+    void runAnalysis(DEMO_REPO, { preset: "month" });
   }
 
   function submit(e: FormEvent) {
@@ -257,73 +285,55 @@ export function AnalyseRepo() {
 
   const poorFit = result && result.fit !== "ok" && (result.fit === "not_found" || result.rows.length === 0);
 
-  return (
-    <section className="tryl analyse" aria-labelledby="repo-h">
-      <h2 id="repo-h">Analyse a repo</h2>
-      <p className="note">
-        Pick a public GitHub repository and a date range. The agent looks at each merged pull request and says what it would pay. Payments only happen for the demo repository, and only council members can run them.
-      </p>
+  const totalPaid = paid.reduce((sum, p) => sum + Number(p.amountNear), 0);
+  const isDemoBusy = busySteps === STEPS_PAYABLE;
 
-      <div className="wallet-row">
-        <button type="button" className="btn go" onClick={() => void signIn("intear-wallet")}>
-          Connect Intear
-        </button>
-        <button type="button" className="btn" onClick={() => void signIn("my-near-wallet")}>
-          Connect MyNearWallet
-        </button>
-        {account && (
-          <span>
-            Connected as <b>{account}</b>
-          </span>
-        )}
+  return (
+    <section className="analyse" aria-labelledby="repo-h">
+      <div className="hero">
+        <h2 id="repo-h">An AI agent that pays for merged pull requests</h2>
+        <p className="lead">
+          A DAO hired this agent with a written mission. It reads a repository&apos;s merged pull requests, an AI judges each one, and fixed rules decide what gets paid. On our demo repository, real testnet NEAR moves to the contributor.
+        </p>
+        <p className="heroact">
+          <button type="button" className="btn go big" disabled={busy || paying !== null} onClick={analyseDemo}>
+            Analyse our demo repo
+          </button>
+          <a className="repolink" href={`https://github.com/${DEMO_REPO}`} target="_blank" rel="noreferrer">
+            {DEMO_REPO}
+          </a>
+        </p>
       </div>
 
-      <form className="askform" onSubmit={submit}>
-        <label>
-          Repository
-          <input value={repo} placeholder="owner/name or a GitHub link" maxLength={200} required onChange={(e) => setRepo(e.target.value)} />
-        </label>
-        <fieldset className="rangeset">
-          <legend>Merged in</legend>
-          {(
-            [
-              ["week", "Last 1 week"],
-              ["month", "Last 1 month"],
-              ["custom", "Custom"],
-            ] as const
-          ).map(([id, label]) => (
-            <label key={id} className="chk">
-              <input type="radio" name="range" checked={preset === id} onChange={() => setPreset(id)} />
-              {label}
-            </label>
-          ))}
-        </fieldset>
-        {preset === "custom" && (
-          <>
-            <label>
-              From
-              <input type="date" value={from} required onChange={(e) => setFrom(e.target.value)} />
-            </label>
-            <label>
-              To
-              <input type="date" value={to} required onChange={(e) => setTo(e.target.value)} />
-            </label>
-          </>
-        )}
-        <button type="submit" className="btn go" disabled={busy || paying !== null}>
-          Analyse
-        </button>
-      </form>
-
       <div className="result" aria-live="polite" aria-busy={busy}>
-        {busy && <p className="empty">Reading the pull requests…</p>}
+        {busy && busyRepo && (
+          <div className="progress">
+            <p className="ptitle">Analysing {busyRepo}</p>
+            <ol className="psteps">
+              {busySteps.map((label, i) => (
+                <li key={label} className={i < step ? "done" : i === step ? "now" : "todo"}>
+                  {label}
+                </li>
+              ))}
+            </ol>
+            {!isDemoBusy && (
+              <p className="note">
+                Other repositories can take up to 30 seconds while the AI reads each pull request. In the meantime, <a href="#watch">watch a full term of the agent</a>.
+              </p>
+            )}
+          </div>
+        )}
         {error && (
           <p className="err" role="alert" style={{ whiteSpace: "pre-line" }}>
             {error}
           </p>
         )}
         {result && (
-          <>
+          <div className="tryl">
+            <h3 className="rtitle">
+              {result.repo}
+              {result.payable ? <span className="badge ok">real payments</span> : <span className="badge">analysis only</span>}
+            </h3>
             {poorFit && (
               <div className="rblock">
                 <p>{FIT_REASON[result.fit] ?? FIT_REASON.no_merged_in_range}</p>
@@ -376,19 +386,51 @@ export function AnalyseRepo() {
                 Showing the first {result.rows.length} of {result.total}. Narrow the range.
               </p>
             )}
-            {canRun && (
-              <p>
-                <button type="button" className="btn go" disabled={paying !== null} onClick={() => void runPayments()}>
-                  Run payments
-                </button>
-              </p>
+            {result.payable && (
+              <div className="wallet-row">
+                {account ? (
+                  <span>
+                    Connected as <b>{account}</b>
+                    {!isCouncil && council && " (not a council member, so you can watch but not pay)"}
+                  </span>
+                ) : (
+                  <>
+                    <span className="small">Council members connect a wallet to run payments:</span>
+                    <button type="button" className="btn" onClick={() => void signIn("intear-wallet")}>
+                      Connect Intear
+                    </button>
+                    <button type="button" className="btn" onClick={() => void signIn("my-near-wallet")}>
+                      Connect MyNearWallet
+                    </button>
+                  </>
+                )}
+                {canRun && (
+                  <button type="button" className="btn go" disabled={paying !== null} onClick={() => void runPayments()}>
+                    Run payments
+                  </button>
+                )}
+              </div>
             )}
-          </>
+            <p className="nextstep">
+              Next: <a href="#watch">watch a full term</a>, from the DAO vote that hires the agent to the vote that fires it.
+            </p>
+          </div>
         )}
       </div>
 
-      <section className="paidpanel" aria-labelledby="paid-h">
+      <section className="paidpanel tryl" aria-labelledby="paid-h">
         <h3 id="paid-h">Paid PRs</h3>
+        <p className="note">
+          Every payment the agent has made, read from its on-chain work log.
+          {paid.length > 0 && (
+            <>
+              {" "}
+              <b>
+                {paid.length} pull request{paid.length === 1 ? "" : "s"} paid, {Number(totalPaid.toFixed(3))} NEAR in total.
+              </b>
+            </>
+          )}
+        </p>
         {paidError && <p className="err">{paidError}</p>}
         {!paidError && paid.length === 0 && <p className="empty">Nothing has been paid yet.</p>}
         {paid.length > 0 && (
@@ -414,6 +456,47 @@ export function AnalyseRepo() {
           </ul>
         )}
       </section>
+
+      <form className="askform tryl" onSubmit={submit} aria-labelledby="any-h">
+        <h3 id="any-h" className="formtitle">
+          Or analyse any public repository
+        </h3>
+        <label>
+          Repository
+          <input value={repo} placeholder="owner/name or a GitHub link" maxLength={200} required onChange={(e) => setRepo(e.target.value)} />
+        </label>
+        <fieldset className="rangeset">
+          <legend>Merged in</legend>
+          {(
+            [
+              ["week", "Last 1 week"],
+              ["month", "Last 1 month"],
+              ["custom", "Custom"],
+            ] as const
+          ).map(([id, label]) => (
+            <label key={id} className="chk">
+              <input type="radio" name="range" checked={preset === id} onChange={() => setPreset(id)} />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+        {preset === "custom" && (
+          <>
+            <label>
+              From
+              <input type="date" value={from} required onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label>
+              To
+              <input type="date" value={to} required onChange={(e) => setTo(e.target.value)} />
+            </label>
+          </>
+        )}
+        <button type="submit" className="btn go" disabled={busy || paying !== null}>
+          Analyse
+        </button>
+        <p className="note formnote">Analysis only: nothing is paid for repositories other than the demo repo.</p>
+      </form>
     </section>
   );
 }

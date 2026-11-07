@@ -279,3 +279,31 @@ table.prs th, table.prs td { text-align: left; padding: 8px 10px; border-bottom:
 .paidpanel { margin-top: 24px; }
 .paidlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .paidlist li { border: 1px solid var(--line); border-radius: var(--r-small); padding: 10px 14px; display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+
+/* Analyse page: hero, live progress, result header, next-step links */
+.analyse { display: grid; gap: 22px; }
+.hero h2 { font-family: var(--head); font-size: clamp(1.6rem, 2.4vw + 0.8rem, 2.4rem); line-height: 1.15; margin: 4px 0 10px; max-width: 24ch; }
+.hero .lead { color: var(--muted); max-width: 68ch; margin: 0 0 16px; }
+.heroact { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 0; }
+.btn.big { font-size: 1.05rem; padding: 14px 26px; min-height: 52px; }
+.repolink { font-family: var(--mono); font-size: 0.9rem; color: var(--muted); }
+.progress { border: 1px solid var(--line); border-radius: var(--r-box); padding: 18px 22px; }
+.ptitle { margin: 0 0 8px; font-weight: 600; }
+.psteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.psteps li { padding-left: 28px; position: relative; color: var(--muted); }
+.psteps li::before { content: ""; position: absolute; left: 4px; top: 0.45em; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); }
+.psteps li.done { color: var(--text); }
+.psteps li.done::before { background: var(--ok); border-color: var(--ok); }
+.psteps li.now { color: var(--text); font-weight: 600; }
+.psteps li.now::before { border-color: var(--ok); animation: pulse 1s ease-in-out infinite alternate; }
+@keyframes pulse { from { box-shadow: 0 0 0 0 var(--ok); } to { box-shadow: 0 0 0 5px transparent; } }
+@media (prefers-reduced-motion: reduce) { .steps li.now::before { animation: none; background: var(--ok); } }
+.rtitle .badge { font-family: var(--body); font-size: 0.78rem; padding: 3px 10px; }
+.rtitle { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; font-family: var(--mono); font-size: 1rem; }
+.nextstep { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.nextstep a { font-weight: 600; }
+.paidpanel { margin-top: 0; }
+.paidpanel h3, .formtitle { margin: 0 0 6px; }
+.formtitle { grid-column: 1 / -1; }
+.formnote { grid-column: 1 / -1; margin: 0; font-size: 0.9rem; }
+.analyse .wallet-row { margin: 16px 0 0; }

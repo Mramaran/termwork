@@ -106,6 +106,7 @@ describe("WatchRun", () => {
 
 describe("App", () => {
   it("header has exact tagline and no forbidden words", async () => {
+    window.location.hash = "#watch";
     render(<App />);
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("heading", { level: 1 }).textContent).toBe("Termwork");
@@ -119,7 +120,9 @@ describe("App", () => {
   it("tabs follow the URL hash", async () => {
     window.location.hash = "#live";
     render(<App />);
-    expect(screen.getByRole("link", { name: /Try the AI live/ }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: /Analyse a repo/ }).getAttribute("aria-current")).toBe("page");
+    const nav = screen.getByRole("navigation", { name: "Views" });
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["1. Analyse a repo", "2. Watch a full term", "3. Run it yourself"]);
     expect(screen.queryByRole("list", { name: /lifecycle/i })).toBeNull();
     window.location.hash = "#watch";
     fireEvent(window, new HashChangeEvent("hashchange"));
@@ -127,6 +130,7 @@ describe("App", () => {
   });
 
   it("verify strip can be dismissed", async () => {
+    window.location.hash = "#watch";
     render(<App />);
     expect(screen.getByText(/Verify in 60 seconds/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));

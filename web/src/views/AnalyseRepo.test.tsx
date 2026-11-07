@@ -15,7 +15,7 @@ const chain = vi.hoisted(() => ({
 vi.mock("../wallet", () => wallet);
 vi.mock("../chain", () => chain);
 
-import { AnalyseRepo } from "./AnalyseRepo";
+import { AnalyseRepo, DEMO_REPO } from "./AnalyseRepo";
 
 type Row = Record<string, unknown>;
 const row = (over: Row): Row => ({
@@ -168,14 +168,26 @@ describe("AnalyseRepo", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("The AI request failed. Try again in a minute.");
   });
 
+  it("one click analyses the demo repo over the last month, with steps shown while it runs", async () => {
+    const calls = mockApi({ analyse: [ok([row({})])] });
+    render(<AnalyseRepo />);
+    expect(screen.queryByRole("button", { name: "Connect Intear" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Analyse our demo repo" }));
+    expect(screen.getByText("Reading merged pull requests from GitHub")).toBeTruthy();
+    await screen.findByText("Ready to pay");
+    expect(callsTo(calls, "/api/analyse")[0]!.body).toEqual({ repo: DEMO_REPO, range: { preset: "month" } });
+    expect(screen.getByRole("button", { name: "Connect Intear" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "watch a full term" }).getAttribute("href")).toBe("#watch");
+  });
+
   it("Run payments hidden for a non-council wallet, visible for a council member", async () => {
     wallet.connectedAccount.mockResolvedValue("bob.testnet");
     mockApi({ analyse: [ok([row({})])] });
     render(<AnalyseRepo />);
-    await screen.findByText(/bob\.testnet/);
     typeRepo("o/r");
     analyse();
     await screen.findByText("Ready to pay");
+    expect(await screen.findByText(/not a council member/)).toBeTruthy();
     await waitFor(() => expect(chain.councilMembers).toHaveBeenCalled());
     expect(screen.queryByRole("button", { name: "Run payments" })).toBeNull();
     cleanup();

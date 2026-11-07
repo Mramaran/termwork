@@ -120,13 +120,17 @@ function payableRow(p: PullRequestFact, paid: Map<string, LogEntry>, pending: Ma
 }
 
 /** Non-payable repo: the model decides, the fixed rules gate it, nothing is paid. */
-async function decidedRow(p: PullRequestFact, mandate: MandateView, deps: AnalyseDeps): Promise<Row> {
+async function decidedRow(p: PullRequestFact, mandate: MandateView, deps: AnalyseDeps, stats: { calls: number; failed: number }): Promise<Row> {
   const b = baseRow(p);
   if (!p.firstTime) return { ...b, status: "skipped", amountNear: null, reason: NOT_FIRST, receiptHash: null, proposalId: null };
   let out: Awaited<ReturnType<typeof complete>>;
+  stats.calls++;
   try {
     out = await deps.complete(decisionMessages(mandate, p), deps.apiKey ?? "", { model: deps.model ?? "" });
-  } catch {
+  } catch (e) {
+    stats.failed++;
+    const msg = (scrub({ status: 0, json: { m: e instanceof Error ? e.message : String(e) } }, deps.secrets ?? []).json as { m: string }).m;
+    console.error(`analyse: AI request failed for ${p.url}: ${msg}`);
     return { ...b, status: "skipped", amountNear: null, reason: "the AI request failed", receiptHash: null, proposalId: null };
   }
   // An unclaimed PR is checked with a placeholder account so the amount is still computed; the recipient is dropped.
@@ -192,7 +196,10 @@ async function run(req: HandleReq, deps: AnalyseDeps): Promise<HandleRes> {
       rows = listed.prs.map((p) => payableRow(p, paid, pending));
     } else {
       const mandate = await deps.getMandate();
-      rows = await mapLimit(listed.prs, CONCURRENCY, (p) => decidedRow(p, mandate, deps));
+      const stats = { calls: 0, failed: 0 };
+      rows = await mapLimit(listed.prs, CONCURRENCY, (p) => decidedRow(p, mandate, deps, stats));
+      if (stats.calls > 0 && stats.failed === stats.calls)
+        return { status: 502, json: { error: "The AI request failed. Try again in a minute." } };
     }
   } catch {
     return { status: 502, json: { error: "The chain could not be read. Try again in a minute." } };

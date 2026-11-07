@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { DEMO_MAX_REQUEST, DEMO_MISSION, DEMO_SPEND_THRESHOLD, type LogEntry, type MandateView, type SpendRequest } from "@termwork/shared";
 import { GitHubError } from "../../agent/src/sources/github";
 import type { PullRequestFact } from "../../agent/src/sources/types";
@@ -199,5 +199,32 @@ describe("/api/analyse", () => {
     expect(body(r).rows).toHaveLength(12);
     expect(max).toBeGreaterThan(1);
     expect(max).toBeLessThanOrEqual(5);
+  });
+
+  it("every model call failing gives 502 and logs a scrubbed line", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const c = (async () => {
+      throw new Error("401 bad key sk-SECRET");
+    }) as unknown as AnalyseDeps["complete"];
+    const r = await handle(post(), mk([pr(1), pr(2)], { complete: c, secrets: ["sk-SECRET"] }));
+    expect(r.status).toBe(502);
+    expect(body(r).error).toBe("The AI request failed. Try again in a minute.");
+    expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls.flat().join(" ")).toContain("401 bad key");
+    expect(spy.mock.calls.flat().join(" ")).not.toContain("sk-SECRET");
+    spy.mockRestore();
+  });
+
+  it("a partial model failure still gives 200 with that row skipped", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    let n = 0;
+    const c = (async () => {
+      if (n++ === 0) throw new Error("boom");
+      return { text: decision, receipt: {}, hash: "h" };
+    }) as unknown as AnalyseDeps["complete"];
+    const r = await handle(post(), mk([pr(1), pr(2)], { complete: c }));
+    expect(r.status).toBe(200);
+    expect(body(r).rows.map((x: any) => x.status).sort()).toEqual(["skipped", "would_pay"]);
+    spy.mockRestore();
   });
 });

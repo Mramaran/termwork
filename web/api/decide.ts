@@ -4,6 +4,7 @@ import { decisionMessages } from "../../agent/src/prompts";
 import { parseDecision, validate, type Decision } from "../../agent/src/validate";
 import { nodeHandler, scrub, type HandleReq, type HandleRes } from "./_lib/http";
 import { makeLimiter } from "./_lib/limits";
+import { yoctoToNear } from "./_lib/near-format";
 
 export interface DecideDeps {
   complete: typeof complete;
@@ -47,13 +48,6 @@ function parseInput(body: string): Input | { error: string; field: string } {
     nearAccount = r.nearAccount;
   }
   return { title: r.title, changedLines: r.changedLines, feature: r.feature, firstTime: r.firstTime, nearAccount };
-}
-
-function yoctoToNear(y: string): string {
-  const s = y.padStart(25, "0");
-  const whole = s.slice(0, -24);
-  const frac = s.slice(-24).replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole;
 }
 
 /**

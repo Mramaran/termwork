@@ -9,6 +9,7 @@ import { labelPaid, type PaidInfo } from "./_lib/github-write";
 import { nodeHandler, scrub, type HandleReq, type HandleRes } from "./_lib/http";
 import { parseRange, parseRepo, payableRepos } from "./_lib/input";
 import { makeLimiter } from "./_lib/limits";
+import { yoctoToNear } from "./_lib/near-format";
 import { accountExists, getMandate, getRequests, getWorkLog } from "./_lib/near";
 
 export interface PayConfig {
@@ -48,13 +49,6 @@ export const limiter = makeLimiter(30, 100);
 const MAX_BODY = 4096;
 const FIELDS = new Set(["repo", "number", "range", "proof"]);
 const DUPLICATE = "already paid or pending";
-
-function yoctoToNear(y: string): string {
-  const s = y.padStart(25, "0");
-  const whole = s.slice(0, -24);
-  const frac = s.slice(-24).replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole;
-}
 
 const MAX_RATIONALE_BYTES = 2048;
 const RPC_CHECK_PREFIX = "recipient check failed (rpc)";

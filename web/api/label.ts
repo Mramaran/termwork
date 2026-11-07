@@ -3,6 +3,7 @@ import { labelPaid, type PaidInfo } from "./_lib/github-write";
 import { nodeHandler, scrub, type HandleReq, type HandleRes } from "./_lib/http";
 import { parseRepo, payableRepos } from "./_lib/input";
 import { makeLimiter } from "./_lib/limits";
+import { yoctoToNear } from "./_lib/near-format";
 import { getRequests, getWorkLog, txStatus, type TxStatus } from "./_lib/near";
 
 export interface LabelConfig {
@@ -30,13 +31,6 @@ const FIELDS = new Set(["repo", "number", "txHash", "sender"]);
 const TX_HASH_RE = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 const ACCOUNT_RE = /^(?=.{2,64}$)[a-z\d]+(?:[-_][a-z\d]+)*(?:\.[a-z\d]+(?:[-_][a-z\d]+)*)*$/;
 const NOT_CONFIRMED: HandleRes = { status: 409, json: { error: "payment not confirmed" } };
-
-function yoctoToNear(y: string): string {
-  const s = y.padStart(25, "0");
-  const whole = s.slice(0, -24);
-  const frac = s.slice(-24).replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole;
-}
 
 /** The proposal id when the transaction approves one through act_proposal, else null. */
 function approvedProposal(tx: TxStatus): number | null {

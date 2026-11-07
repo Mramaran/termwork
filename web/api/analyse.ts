@@ -7,6 +7,7 @@ import { parseDecision, validate } from "../../agent/src/validate";
 import { nodeHandler, scrub, type HandleReq, type HandleRes } from "./_lib/http";
 import { parseRange, parseRepo, payableRepos } from "./_lib/input";
 import { makeLimiter } from "./_lib/limits";
+import { yoctoToNear } from "./_lib/near-format";
 import { getMandate, getRequests, getWorkLog } from "./_lib/near";
 
 export interface AnalyseDeps {
@@ -50,13 +51,6 @@ const MAX_BODY = 1024;
 const CONCURRENCY = 5;
 const PLACEHOLDER_ACCOUNT = "unclaimed.testnet";
 const FIXED_SUGGESTIONS = ["near/near-cli-rs", "near/near-sdk-rs"];
-
-function yoctoToNear(y: string): string {
-  const s = y.padStart(25, "0");
-  const whole = s.slice(0, -24);
-  const frac = s.slice(-24).replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole;
-}
 
 function suggestionsFor(repo: string, payable: Set<string>): string[] {
   const first = [...payable][0];

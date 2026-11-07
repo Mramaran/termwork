@@ -46,6 +46,7 @@ const FIT_REASON: Record<string, string> = {
 };
 
 const FAILED = "The request failed. Try again in a minute.";
+const DUPLICATE = "already paid or pending";
 const OFFLINE = "Could not reach the server. Check your connection and try again.";
 
 async function post(url: string, body: unknown): Promise<{ ok: boolean; status: number; data: Record<string, unknown> | null }> {
@@ -100,28 +101,28 @@ export function AnalyseRepo() {
 
   const currentRange = (): Range => (preset === "custom" ? { preset, from, to } : { preset });
 
-  /** Runs the analysis; returns whether it succeeded. */
-  async function runAnalysis(repoText: string, range: Range, quiet = false): Promise<boolean> {
+  /** Runs the analysis; returns the error message, or null on success. The message is also shown unless `quiet`. */
+  async function runAnalysis(repoText: string, range: Range, quiet = false): Promise<string | null> {
     setBusy(true);
     setError(null);
     if (!quiet) setResult(null);
+    const fail = (msg: string) => {
+      if (!quiet) setError(msg);
+      return msg;
+    };
     try {
       const { ok, status, data } = await post("/api/analyse", { repo: repoText, range });
       if (status === 404 && data?.fit === "not_found") {
         setResult({ repo: repoText, payable: false, total: 0, capped: false, suggestions: (data.suggestions as string[]) ?? [], fit: "not_found", rows: [] });
         setRan({ repo: repoText, range });
-        return true;
+        return null;
       }
-      if (!ok || !data || !Array.isArray(data.rows)) {
-        setError(errorText(data, status));
-        return false;
-      }
+      if (!ok || !data || !Array.isArray(data.rows)) return fail(errorText(data, status));
       setResult(data as unknown as Analysis);
       setRan({ repo: repoText, range });
-      return true;
+      return null;
     } catch {
-      setError(OFFLINE);
-      return false;
+      return fail(OFFLINE);
     } finally {
       setBusy(false);
     }
@@ -163,21 +164,24 @@ export function AnalyseRepo() {
         setError((e as Error).message);
         return;
       }
-      let failure: string | null = null;
+      const failures: string[] = [];
       for (const r of readyRows) {
         try {
           const { ok, status, data } = await post("/api/pay", { repo: ran.repo, number: r.number, range: ran.range, proof });
           if (!ok) {
-            failure = `PR #${r.number}: ${errorText(data, status)}`;
-            break;
+            failures.push(`PR #${r.number}: ${errorText(data, status)}`);
+            const msg = typeof data?.error === "string" ? data.error : "";
+            const perRow = status === 404 || (status === 409 && msg === DUPLICATE);
+            if (!perRow) break;
           }
         } catch {
-          failure = OFFLINE;
+          failures.push(OFFLINE);
           break;
         }
       }
-      const refreshed = await runAnalysis(ran.repo, ran.range, true);
-      if (failure && refreshed) setError(failure);
+      const refreshError = await runAnalysis(ran.repo, ran.range, true);
+      const lines = refreshError ? [...failures, refreshError] : failures;
+      if (lines.length > 0) setError(lines.join("\n"));
       void loadPaid();
     } finally {
       setPaying(null);
@@ -190,9 +194,16 @@ export function AnalyseRepo() {
     setPaying(`vote-${r.number}`);
     try {
       const txHash = await vote(r.proposalId, true);
-      const { ok, status, data } = await post("/api/label", { repo: ran.repo, number: r.number, txHash, sender: account });
-      const refreshed = await runAnalysis(ran.repo, ran.range, true);
-      if (!ok && refreshed) setError(errorText(data, status));
+      const lines: string[] = [];
+      if (txHash === null) {
+        lines.push("Vote sent. The paid label will appear once it is confirmed.");
+      } else {
+        const { ok, status, data } = await post("/api/label", { repo: ran.repo, number: r.number, txHash, sender: account });
+        if (!ok) lines.push(errorText(data, status));
+      }
+      const refreshError = await runAnalysis(ran.repo, ran.range, true);
+      if (refreshError) lines.push(refreshError);
+      if (lines.length > 0) setError(lines.join("\n"));
       void loadPaid();
     } catch (e) {
       setError((e as Error).message || FAILED);
@@ -306,7 +317,7 @@ export function AnalyseRepo() {
       <div className="result" aria-live="polite" aria-busy={busy}>
         {busy && <p className="empty">Reading the pull requests…</p>}
         {error && (
-          <p className="err" role="alert">
+          <p className="err" role="alert" style={{ whiteSpace: "pre-line" }}>
             {error}
           </p>
         )}

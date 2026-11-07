@@ -223,6 +223,66 @@ describe("AnalyseRepo", () => {
     expect(order).toEqual(["/api/analyse", "/api/pay", "/api/pay", "/api/analyse"]);
   });
 
+  it("a duplicate on one row does not stop the next row", async () => {
+    wallet.connectedAccount.mockResolvedValue("me.testnet");
+    const rows = [row({ number: 7 }), row({ number: 9 })];
+    const calls = mockApi({
+      analyse: [ok(rows), ok(rows)],
+      pay: (b) => (b.number === 7 ? { status: 409, body: { error: "already paid or pending" } } : { status: 200, body: { kind: "spend", txHash: "H" } }),
+    });
+    render(<AnalyseRepo />);
+    typeRepo("o/r");
+    analyse();
+    fireEvent.click(await screen.findByRole("button", { name: "Run payments" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("PR #7: already paid or pending");
+    expect(callsTo(calls, "/api/pay").map((c) => c.body!.number)).toEqual([7, 9]);
+  });
+
+  it("a global 409 stops the run", async () => {
+    wallet.connectedAccount.mockResolvedValue("me.testnet");
+    const rows = [row({ number: 7 }), row({ number: 9 })];
+    const calls = mockApi({
+      analyse: [ok(rows), ok(rows)],
+      pay: () => ({ status: 409, body: { error: "The agent's budget is used up." } }),
+    });
+    render(<AnalyseRepo />);
+    typeRepo("o/r");
+    analyse();
+    fireEvent.click(await screen.findByRole("button", { name: "Run payments" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("budget is used up");
+    expect(callsTo(calls, "/api/pay")).toHaveLength(1);
+  });
+
+  it("keeps the pay failure message when the refresh also fails", async () => {
+    wallet.connectedAccount.mockResolvedValue("me.testnet");
+    const calls = mockApi({
+      analyse: [ok([row({ number: 7 })]), () => ({ status: 502, body: { error: "GitHub could not be read." } })],
+      pay: () => ({ status: 409, body: { error: "The agent is not active (expired or fired)." } }),
+    });
+    render(<AnalyseRepo />);
+    typeRepo("o/r");
+    analyse();
+    fireEvent.click(await screen.findByRole("button", { name: "Run payments" }));
+    await waitFor(() => expect(callsTo(calls, "/api/analyse")).toHaveLength(2));
+    const t = (await screen.findByRole("alert")).textContent!;
+    expect(t).toContain("PR #7: The agent is not active");
+    expect(t).toContain("GitHub could not be read.");
+  });
+
+  it("Approve & pay with no hash skips the label and says the vote was sent", async () => {
+    wallet.connectedAccount.mockResolvedValue("me.testnet");
+    wallet.vote.mockResolvedValue(null as never);
+    const pending = [row({ number: 9, status: "pending", amountNear: "2", proposalId: 12 })];
+    const calls = mockApi({ analyse: [ok(pending), ok(pending)] });
+    render(<AnalyseRepo />);
+    typeRepo("o/r");
+    analyse();
+    fireEvent.click(await screen.findByRole("button", { name: "Approve & pay" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Vote sent. The paid label will appear once it is confirmed.");
+    expect(callsTo(calls, "/api/label")).toHaveLength(0);
+    await waitFor(() => expect(callsTo(calls, "/api/analyse")).toHaveLength(2));
+  });
+
   it("Approve & pay votes then labels", async () => {
     wallet.connectedAccount.mockResolvedValue("me.testnet");
     const pending = [row({ number: 9, status: "pending", amountNear: "2", proposalId: 12 })];

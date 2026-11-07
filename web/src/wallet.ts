@@ -35,7 +35,7 @@ export async function disconnect(): Promise<void> {
   await wallet.signOut();
 }
 
-/** Calls the Sputnik DAO act_proposal and returns the transaction hash. The wallet asks for approval. */
+/** Calls the Sputnik DAO act_proposal and returns the transaction hash, or null when the wallet gives none. The wallet asks for approval. */
 export async function vote(id: number, approve: boolean): Promise<string> {
   const s = await selector();
   const wallet = await s.wallet();

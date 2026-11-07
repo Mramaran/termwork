@@ -12,13 +12,13 @@ const pull = (n: number, login = "alice", body: string | null = "near: alice.tes
   additions: 2, deletions: 1, labels: [{ name: "bug" }], merged_at: mergedAt,
 });
 
-interface Opts { hits?: number[]; total?: number; prior?: number; author?: string }
+interface Opts { hits?: number[]; total?: number; priorAt?: string; author?: string }
 function fakeFetch(o: Opts, urls: string[]) {
   return (async (url: string) => {
     const u = String(url);
     urls.push(u);
     if (u.includes("/search/issues")) {
-      if (u.includes("author%3A")) return resp({ total_count: o.prior ?? 0, items: [] });
+      if (u.includes("author%3A")) return resp({ total_count: 1, items: o.priorAt ? [{ pull_request: { merged_at: o.priorAt } }] : [] });
       const hits = o.hits ?? [1, 2];
       return resp({ total_count: o.total ?? hits.length, items: hits.map((number) => ({ number })) });
     }
@@ -52,33 +52,39 @@ describe("listMergedInRange", () => {
     expect(r.capped).toBe(true);
   });
 
-  it("firstTime uses whole history", async () => {
+  it("firstTime uses whole history: an earlier merged PR means not first-time", async () => {
     const urls: string[] = [];
-    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: fakeFetch({ hits: [1], prior: 1 }, urls) });
+    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: fakeFetch({ hits: [1], priorAt: "2026-01-01T00:00:00Z" }, urls) });
     expect(r.prs[0]!.firstTime).toBe(false);
     const prior = urls.find((u) => u.includes("author%3A"))!;
-    expect(q(prior)).toContain("merged:<" + r.prs[0]!.mergedAt);
+    expect(q(prior)).toBe("repo:near/x is:pr is:merged author:alice");
     expect(q(prior)).not.toContain("2026-10-01..2026-11-07");
+    expect(prior).toContain("per_page=100");
   });
 
-  it("firstTime is true when there is no earlier merged PR", async () => {
-    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: fakeFetch({ hits: [1], prior: 0 }, []) });
+  it("firstTime is true when the author's earliest merged PR is the PR itself", async () => {
+    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: fakeFetch({ hits: [1], priorAt: pull(1).merged_at! }, []) });
     expect(r.prs[0]!.firstTime).toBe(true);
   });
 
-  it("one prior-merged search per distinct author", async () => {
+  it("firstTime is true when the author has no earlier merged PR", async () => {
+    const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: fakeFetch({ hits: [1] }, []) });
+    expect(r.prs[0]!.firstTime).toBe(true);
+  });
+
+  it("one prior-merged search per distinct author, even with different mergedAt", async () => {
     const urls: string[] = [];
-    // same author and same mergedAt, so the cache key is shared
+    const at = (n: number) => `2026-10-0${n}T00:00:00Z`;
     const f = (async (url: string) => {
       const u = String(url);
       urls.push(u);
-      if (u.includes("author%3A")) return resp({ total_count: 0 });
+      if (u.includes("author%3A")) return resp({ items: [1, 2, 3].map((n) => ({ pull_request: { merged_at: at(n) } })) });
       if (u.includes("/search/issues")) return resp({ total_count: 3, items: [{ number: 1 }, { number: 2 }, { number: 3 }] });
       const n = Number(u.split("/pulls/")[1]);
-      return resp(pull(n, "alice", null, "2026-10-05T00:00:00Z"));
+      return resp(pull(n, "alice", null, at(n)));
     }) as unknown as typeof fetch;
     const r = await listMergedInRange(REPO, "2026-10-01", "2026-11-07", { fetchFn: f });
-    expect(r.prs).toHaveLength(3);
+    expect(r.prs.map((p) => p.firstTime)).toEqual([true, false, false]);
     expect(urls.filter((u) => u.includes("author%3A"))).toHaveLength(1);
   });
 
@@ -110,7 +116,7 @@ describe("listMergedInRange", () => {
   it("a non-rate-limit detail failure skips that PR", async () => {
     const f = (async (url: string) => {
       const u = String(url);
-      if (u.includes("author%3A")) return resp({ total_count: 0 });
+      if (u.includes("author%3A")) return resp({ items: [] });
       if (u.includes("/search/issues")) return resp({ total_count: 2, items: [{ number: 1 }, { number: 2 }] });
       return u.includes("/pulls/1") ? resp({}, 500) : resp(pull(2));
     }) as unknown as typeof fetch;
@@ -129,7 +135,7 @@ describe("listMergedInRange", () => {
 
 describe("getMergedPr", () => {
   it("returns the fact for a merged PR", async () => {
-    const pr = await getMergedPr(REPO, 4, { fetchFn: fakeFetch({ prior: 0 }, []) });
+    const pr = await getMergedPr(REPO, 4, { fetchFn: fakeFetch({}, []) });
     expect(pr).toMatchObject({ number: 4, firstTime: true, nearAccount: "alice.testnet" });
   });
 

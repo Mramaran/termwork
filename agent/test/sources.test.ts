@@ -19,7 +19,7 @@ describe("sources", () => {
     const f = (async (url: string) => {
       const u = String(url);
       const body = u.includes("/search/issues")
-        ? { total_count: 0 }
+        ? { items: [] }
         : u.includes("/pulls/7")
           ? { html_url: "https://github.com/o/r/pull/7", number: 7, title: "t", body: "near: z.testnet", user: { login: "z" }, additions: 5, deletions: 3, labels: [{ name: "feature" }], merged_at: "2026-11-01T00:00:00Z" }
           : [{ number: 7, merged_at: "2026-11-01T00:00:00Z" }, { number: 8, merged_at: null }];
@@ -37,28 +37,28 @@ describe("sources", () => {
     additions: 1, deletions: 1, labels: [], merged_at: `2026-11-0${n}T00:00:00Z`,
   });
 
-  it("first-time uses merged:<mergedAt, so a later merged PR does not matter", async () => {
+  it("first-time ignores a later merged PR by the same author", async () => {
     const queries: string[] = [];
     const f = (async (url: string) => {
       const u = String(url);
       if (u.includes("/search/issues")) {
         const q = decodeURIComponent(u.split("q=")[1]!);
         queries.push(q);
-        return resp({ total_count: 0 });
+        return resp({ items: [{ pull_request: { merged_at: "2026-12-01T00:00:00Z" } }] });
       }
       if (u.includes("/pulls/1")) return resp(pull(1, { login: "z" }));
       return resp([{ number: 1, merged_at: "2026-11-01T00:00:00Z" }]);
     }) as unknown as typeof fetch;
     const prs = await githubAdapter("o/r", f).listMerged();
     expect(prs[0]!.firstTime).toBe(true);
-    expect(queries[0]).toContain("merged:<2026-11-01T00:00:00Z");
+    expect(queries).toHaveLength(1);
   });
 
   it("skips null-user and failing-search PRs but keeps the rest", async () => {
     const f = (async (url: string) => {
       const u = String(url);
       if (u.includes("/search/issues")) {
-        return decodeURIComponent(u).includes("author:bad") ? resp({}, false) : resp({ total_count: 1 });
+        return decodeURIComponent(u).includes("author:bad") ? resp({}, false) : resp({ items: [{ pull_request: { merged_at: "2026-10-01T00:00:00Z" } }] });
       }
       if (u.includes("/pulls/1")) return resp(pull(1, null));
       if (u.includes("/pulls/2")) return resp(pull(2, { login: "bad" }));

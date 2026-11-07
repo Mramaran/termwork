@@ -61,14 +61,16 @@ function githubClient(repo: string, fetchFn: FetchFn, token: string | undefined)
     return (await res.json()) as T;
   }
 
-  const cache = new Map<string, Promise<number>>();
-  /** Merged PRs by this author in the repo before `mergedAt`, over the whole history. */
-  function priorMerged(author: string, mergedAt: string): Promise<number> {
-    const q = encodeURIComponent(`is:pr is:merged author:${author} repo:${repo} merged:<${mergedAt}`);
-    let hit = cache.get(q);
+  const cache = new Map<string, Promise<string[]>>();
+  /** One search per author: the merged_at of their merged PRs in the repo (first 100). */
+  function mergedTimes(author: string): Promise<string[]> {
+    let hit = cache.get(author);
     if (!hit) {
-      hit = get<{ total_count: number }>(`https://api.github.com/search/issues?q=${q}`).then((r) => r.total_count);
-      cache.set(q, hit);
+      const q = encodeURIComponent(`repo:${repo} is:pr is:merged author:${author}`);
+      hit = get<{ items: Array<{ pull_request?: { merged_at?: string | null } }> }>(
+        `https://api.github.com/search/issues?q=${q}&per_page=100`,
+      ).then((r) => r.items.flatMap((i) => (i.pull_request?.merged_at ? [i.pull_request.merged_at] : [])));
+      cache.set(author, hit);
     }
     return hit;
   }
@@ -76,13 +78,15 @@ function githubClient(repo: string, fetchFn: FetchFn, token: string | undefined)
   async function factFor(number: number): Promise<PullRequestFact | null> {
     const pr = await get<PullDetail>(`https://api.github.com/repos/${repo}/pulls/${number}`);
     if (!pr.user?.login || !pr.merged_at) return null;
-    const prior = await priorMerged(pr.user.login, pr.merged_at);
+    const mergedAt = pr.merged_at;
+    const times = await mergedTimes(pr.user.login);
+    const firstTime = !times.some((t) => Date.parse(t) < Date.parse(mergedAt));
     return {
       url: pr.html_url,
       number: pr.number,
       title: pr.title,
       author: pr.user.login,
-      firstTime: prior === 0,
+      firstTime,
       changedLines: pr.additions + pr.deletions,
       labels: pr.labels.map((l) => l.name),
       mergedAt: pr.merged_at,

@@ -35,14 +35,17 @@ export async function disconnect(): Promise<void> {
   await wallet.signOut();
 }
 
-/** Calls the Sputnik DAO act_proposal. The wallet asks for approval; the page reloads afterwards. */
-export async function vote(id: number, approve: boolean): Promise<void> {
+/** Calls the Sputnik DAO act_proposal and returns the transaction hash. The wallet asks for approval. */
+export async function vote(id: number, approve: boolean): Promise<string> {
   const s = await selector();
   const wallet = await s.wallet();
-  await wallet.signAndSendTransaction({
+  const outcome = await wallet.signAndSendTransaction({
     receiverId: DAO_ID,
     actions: [actionCreators.functionCall("act_proposal", voteArgs(id, approve), BigInt(VOTE_GAS), 0n)],
   });
+  const hash = outcome?.transaction?.hash;
+  if (typeof hash !== "string") throw new Error("Your wallet did not return the transaction hash.");
+  return hash;
 }
 
 const toBase64 = (b: Uint8Array): string => btoa(String.fromCharCode(...b));

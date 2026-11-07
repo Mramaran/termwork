@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { loadRun, type RunData } from "./run";
+import { AnalyseRepo } from "./views/AnalyseRepo";
 import { LiveDao } from "./views/LiveDao";
 import { RunYourself } from "./views/RunYourself";
 import { TryLive } from "./views/TryLive";
 import { WatchRun } from "./views/WatchRun";
 
-type Tab = "watch" | "live" | "yourself";
+type Tab = "watch" | "live" | "repo" | "yourself";
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "watch", label: "Watch our run", icon: "M4 2l10 6-10 6z" },
   {
@@ -13,6 +14,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
     label: "Try the AI live",
     icon: "M9 1L3 9h5l-1 6 6-8H8z"
   },
+  { id: "repo", label: "Analyse a repo", icon: "M2 3h12M2 8h12M2 13h8" },
   {
     id: "yourself",
     label: "Run it yourself",
@@ -22,7 +24,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 const tabFromHash = (): Tab => {
   const h = window.location.hash.replace(/^#/, "");
-  return h === "live" || h === "yourself" ? h : "watch";
+  return h === "live" || h === "repo" || h === "yourself" ? h : "watch";
 };
 
 type Theme = "dark" | "light";
@@ -130,6 +132,7 @@ export function App() {
           ))}
         {tab === "watch" && <LiveDao />}
         {tab === "live" && <TryLive />}
+        {tab === "repo" && <AnalyseRepo />}
         {tab === "yourself" && <RunYourself />}
       </main>
       <footer>Testnet only. The run was recorded once; the agent-key check reads the chain live.</footer>

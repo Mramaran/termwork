@@ -17,6 +17,13 @@
 </p>
 
 <p align="center">
+  <a href="#tests"><img alt="TypeScript tests: 347 passing" src="https://img.shields.io/badge/TypeScript%20tests-347%20passing-2ea44f?style=flat-square"></a>
+  <a href="#tests"><img alt="Contract tests: 57 passing" src="https://img.shields.io/badge/contract%20tests-57%20passing-2ea44f?style=flat-square"></a>
+  <a href="#the-end-to-end-demo"><img alt="Demo checks: 8 of 8" src="https://img.shields.io/badge/demo%20checks-8%2F8%20PASS-2ea44f?style=flat-square"></a>
+  <a href="#receipts"><img alt="AI receipts: 8 of 8 verified" src="https://img.shields.io/badge/AI%20receipts-8%2F8%20verified-2ea44f?style=flat-square"></a>
+</p>
+
+<p align="center">
   <a href="https://termwork-nu.vercel.app/#repo"><b>Analyse a repo</b></a> ·
   <a href="https://termwork-nu.vercel.app/#watch"><b>Watch a full term</b></a> ·
   <a href="https://termwork-nu.vercel.app/#yourself"><b>Run it yourself</b></a> ·
@@ -38,10 +45,12 @@ Termwork lets a [Sputnik DAO](https://github.com/near-daos/sputnik-dao-contract)
 | **Safety** | The model never sees a key. A fixed-rule validator, a local signer with five operations, and the contract's own limits stand between the model and the money. |
 | **Proof** | 5 real pull requests paid 1.6 NEAR on testnet, a recorded term from hire to fire, and every AI decision signed inside a TEE. |
 | **Stack** | Rust contract (near-sdk 5), TypeScript agent and signer, NEAR AI Cloud, React on Vercel. |
+| **Tracks** | Social Money (main), Privacy & Private AI, Agent Economy, AI Security & Defense. See [Why this is Social Money](#why-this-is-social-money). |
 
 ## Contents
 
 - [The problem](#the-problem)
+- [Why this is Social Money](#why-this-is-social-money)
 - [Proof it works](#proof-it-works)
 - [Try it](#try-it)
 - [The end-to-end demo](#the-end-to-end-demo)
@@ -56,6 +65,20 @@ Termwork lets a [Sputnik DAO](https://github.com/near-daos/sputnik-dao-contract)
 ## The problem
 
 Communities are starting to hand real money to AI agents, but all they can do is switch them on or off. Either one member runs the agent with a key the community cannot take back, or a wallet gets a permanent allowance and the agent runs until someone notices a problem. Nobody checks whether the agent is still worth paying, nothing ends it by default, and a prompt-injected agent holding a raw key can reach whatever that key reaches.
+
+## Why this is Social Money
+
+The Social Money track asks for shared budgets and programmable rewards on top of Sputnik DAO, without rebuilding the multisig. This table shows where each of those lives in Termwork.
+
+| The track asks for | Where it is in Termwork |
+|---|---|
+| A shared budget | The council votes the agent's budget in the `hire` proposal and can top it up in `renew`. The mandate contract holds it and spends at most that voted total, never the account balance (`contracts/mandate/src/agent.rs`). |
+| Programmable rewards | The mission's clauses say what earns a reward and how much: 0.2 NEAR for a merged code change, 0.5 NEAR for a larger one (a `feature` label or more than 200 changed lines), nothing for a typo, formatting or bot change (`packages/shared/src/mission.ts`). The model applies the clauses; the validator and the contract enforce the amounts. |
+| Approval that scales with the amount | Up to the spend threshold (0.2 NEAR) the agent pays directly. A larger reward becomes an ordinary Sputnik proposal and is paid only if the council approves it. |
+| Built on Sputnik DAO, no new multisig | The DAO is an unmodified Sputnik DAO v2 from the `sputnikv2.testnet` factory. Hiring, renewing and firing the agent and approving a large payout are all standard Sputnik `FunctionCall` proposals voted by the council. |
+| Named accounts | Each contributor is paid at the named NEAR account written in their pull request (`near: yourname.testnet`). |
+
+Termwork adds one thing communities don't have today: a way to hold the agent itself to account. The DAO hires it for a term, reads its renewal case against the on-chain work log, and can fire it at any time, which deletes its key.
 
 ## Proof it works
 
@@ -318,8 +341,8 @@ The `receipts/` folder holds the live receipts from the recorded runs (model `Qw
 
 | Command | Runs | Needs |
 |---|---|---|
-| `npm test` (repo root) | The vitest suites of every workspace: signer, agent, web (the page and the `/api` functions), scripts and shared. | No network and no key. |
-| `cargo test` (in `contracts/mandate`) | The unit tests and the sandbox lifecycle tests, which run the mandate next to the real Sputnik DAO wasm. | Linux, macOS or WSL (the near-sandbox binary is not available for native Windows), `cargo-near` and the `wasm32-unknown-unknown` target. |
+| `npm test` (repo root) | 347 vitest tests across every workspace: signer, agent, web (the page and the `/api` functions), scripts and shared. | No network and no key. |
+| `cargo test` (in `contracts/mandate`) | 53 unit tests and 4 sandbox lifecycle tests, which run the mandate next to the real Sputnik DAO wasm. | Linux, macOS or WSL (the near-sandbox binary is not available for native Windows), `cargo-near` and the `wasm32-unknown-unknown` target. |
 | `cargo test --test lifecycle` | Only the lifecycle tests. They build the wasm themselves with `cargo near build non-reproducible-wasm`, so they always test the current source. | As above. See [`contracts/mandate/README.md`](contracts/mandate/README.md) for WSL tips. |
 
 ## Built during NEAR HACKATHON

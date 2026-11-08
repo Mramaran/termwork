@@ -312,8 +312,6 @@ The `receipts/` folder holds the live receipts from the recorded runs (model `Qw
    The functions read them at request time and answer 503 if one they need is missing.
 2. `npm run -w scripts deploy-vercel` makes a preview deployment, and `npm run -w scripts deploy-vercel -- --prod` updates <https://termwork-nu.vercel.app>. Pass `VITE_MANDATE_ID` and `VITE_DAO_ID` in the environment so the page reads the same mandate. The script first runs `npm test` and the web typecheck. It then builds `web`, bundles each function with esbuild, checks that every bundle loads and exports a handler, and runs a pinned Vercel CLI with `deploy --prebuilt`.
 
-GitHub Pages is not used. Leave `.github/workflows/pages.yml` disabled in the repository settings: a Pages build has no `/api` functions, so analysis and payments would not work there.
-
 </details>
 
 ## Tests

@@ -251,18 +251,28 @@ A receipt is `verified: true` only if all of these hold:
 
 The agent uses `Qwen/Qwen3.8-27B` on NEAR AI Cloud, a model NEAR AI runs inside a TEE (`owned_by: nearai`). Set it with `NEARAI_MODEL`. NEAR AI prices it at **$0.04 per million input tokens** and **$1.35 per million output tokens**.
 
-Measured on 2026-11-06 with the real decision prompt (`agent/src/prompts.ts`) for one pull request:
+These figures come from the recorded run of 2026-11-07 on the 7 real merged pull requests of [`Mramaran/mission-dao-demo`](https://github.com/Mramaran/mission-dao-demo). Every number is read from the 8 signed receipts in `receipts/`, so anyone can check it.
 
-| | Value |
-|---|---|
-| Time, end to end (completion, attestation report, signature) | 8.4 s |
-| Tokens | 491 input, 84 output |
-| Cost | $0.00013 |
-| Receipt | `verified: true` |
+| PR | Title | Model's decision | Outcome |
+|---|---|---|---|
+| #1 | fix: reject negative amounts in nearToYocto | clause 2, 0.2 NEAR: a bug fix | Paid directly |
+| #2 | feat: add formatNear and parseNear display helpers | clause 3, 0.5 NEAR: `feature` label | Paid after a DAO vote |
+| #3 | docs: fix README heading formatting | clause 1, nothing: formatting only | Skipped |
+| #4 | fix: reject invalid input in yoctoToNear | clause 2, 0.2 NEAR: a bug fix | Paid directly |
+| #5 | feat: add NEAR account id helpers | clause 3, 0.5 NEAR: `feature` label | Paid after a DAO vote |
+| #6 | docs: wrap a long line in the README | clause 1, nothing: formatting only | Skipped |
+| #7 | test: add unit tests for the NEAR conversions | clause 2, 0.2 NEAR: new tests | Paid directly |
 
-A fixture demo run makes 5 decisions and one renewal report, about **$0.001**; the real-PR run above made 7 decisions. The $10 of NEAR AI credit that NEAR Builders offers covers thousands of runs.
+| | Per pull request | Whole run (7 decisions and the renewal report) |
+|---|---|---|
+| Tokens | 556 to 572 input, 66 to 98 output | 5,082 input, 1,083 output |
+| Cost | about $0.00013 | about $0.0017 |
+| Time | one decision about every 6 seconds | 7 decisions in 40 seconds, from the first model response to the last verified receipt |
+| Receipts | `verified: true` | 8 of 8 `verified: true` |
 
-Every chat request sends `reasoning_effort: "none"` and `temperature: 0` (`agent/src/nearai.ts`). The model is a reasoning model. With reasoning on, it spent about 1,750 thinking tokens and 45 seconds on a decision that needs 84 tokens of output, and slower decisions ran past the demo's 5-minute term. Turning reasoning off does not weaken the receipts, because the answer is still signed by the model's TEE key (`signature_kind: provider_tee`). Temperature 0 makes the same pull request get the same decision on the analysis page and when it is paid. The decision is only advice: the fixed rules in `agent/src/validate.ts` and the contract's own checks decide what is paid.
+At that rate, the $10 of NEAR AI credit that NEAR Builders offers covers thousands of runs.
+
+Every chat request sends `reasoning_effort: "none"` and `temperature: 0` (`agent/src/nearai.ts`), and the receipts show 0 reasoning tokens in all 8 answers. The model is a reasoning model. In an earlier test with reasoning on, it spent about 1,750 thinking tokens and 45 seconds on one decision, and slower decisions ran past the demo's 5-minute term. Turning reasoning off does not weaken the receipts, because the answer is still signed by the model's TEE key (`signature_kind: provider_tee`). Temperature 0 makes the same pull request get the same decision on the analysis page and when it is paid. The decision is only advice: the fixed rules in `agent/src/validate.ts` and the contract's own checks decide what is paid.
 
 ### Receipts
 

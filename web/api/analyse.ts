@@ -117,18 +117,19 @@ function payableRow(p: PullRequestFact, paid: Map<string, LogEntry>, pending: Ma
 /** Non-payable repo: the model decides, the fixed rules gate it, nothing is paid. */
 async function decidedRow(p: PullRequestFact, mandate: MandateView, deps: AnalyseDeps, stats: { calls: number; failed: number }): Promise<Row> {
   const b = baseRow(p);
+  // An unclaimed PR is judged with a placeholder account, so the model rates the change itself instead of
+  // refusing for the missing account (clause 4). The row still shows it as unclaimed, with no recipient.
+  const probe = p.nearAccount ? p : { ...p, nearAccount: PLACEHOLDER_ACCOUNT };
   let out: Awaited<ReturnType<typeof complete>>;
   stats.calls++;
   try {
-    out = await deps.complete(decisionMessages(mandate, p), deps.apiKey ?? "", { model: deps.model ?? "" });
+    out = await deps.complete(decisionMessages(mandate, probe), deps.apiKey ?? "", { model: deps.model ?? "" });
   } catch (e) {
     stats.failed++;
     const msg = (scrub({ status: 0, json: { m: e instanceof Error ? e.message : String(e) } }, deps.secrets ?? []).json as { m: string }).m;
     console.error(`analyse: AI request failed for ${p.url}: ${msg}`);
     return { ...b, status: "skipped", amountNear: null, reason: "the AI request failed", receiptHash: null, proposalId: null };
   }
-  // An unclaimed PR is checked with a placeholder account so the amount is still computed; the recipient is dropped.
-  const probe = p.nearAccount ? p : { ...p, nearAccount: PLACEHOLDER_ACCOUNT };
   const action = await validate(parseDecision(out.text), probe, mandate, new Set(), async () => true);
   if (action.kind === "log")
     return { ...b, status: "skipped", amountNear: null, reason: action.summary, receiptHash: out.hash, proposalId: null };

@@ -6,8 +6,10 @@ import { LiveDao } from "./views/LiveDao";
 import { RunYourself } from "./views/RunYourself";
 import { WalletButton } from "./WalletButton";
 import { WatchRun } from "./views/WatchRun";
+import { Privacy, Terms } from "./views/Legal";
 
 type Tab = "repo" | "watch" | "yourself";
+type Page = Tab | "terms" | "privacy";
 const TABS: { id: Tab; label: string; icon: string; stroke: boolean }[] = [
   { id: "repo", label: "1. Analyse a repo", icon: "M2 3h12M2 8h12M2 13h8", stroke: true },
   { id: "watch", label: "2. Watch a full term", icon: "M4 2l10 6-10 6z", stroke: false },
@@ -15,9 +17,9 @@ const TABS: { id: Tab; label: string; icon: string; stroke: boolean }[] = [
 ];
 
 /** Old links: #live was the AI playground, now folded into the repo analysis. */
-const tabFromHash = (): Tab => {
+const tabFromHash = (): Page => {
   const h = window.location.hash.replace(/^#/, "");
-  return h === "watch" || h === "yourself" ? h : "repo";
+  return h === "watch" || h === "yourself" || h === "terms" || h === "privacy" ? h : "repo";
 };
 
 type Theme = "dark" | "light";
@@ -43,14 +45,18 @@ const Icon = ({ d, stroke }: { d: string; stroke: boolean }) => (
 );
 
 export function App() {
-  const [tab, setTab] = useState<Tab>(tabFromHash);
+  const [tab, setTab] = useState<Page>(tabFromHash);
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [run, setRun] = useState<RunData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [strip, setStrip] = useState(true);
 
   useEffect(() => {
-    const on = () => setTab(tabFromHash());
+    const on = () => {
+      const next = tabFromHash();
+      setTab(next);
+      if (next === "terms" || next === "privacy") window.scrollTo(0, 0);
+    };
     window.addEventListener("hashchange", on);
     return () => window.removeEventListener("hashchange", on);
   }, []);
@@ -135,8 +141,16 @@ export function App() {
         )}
         {tab === "repo" && <AnalyseRepo />}
         {tab === "yourself" && <RunYourself />}
+        {tab === "terms" && <Terms />}
+        {tab === "privacy" && <Privacy />}
       </main>
-      <footer>Testnet only. The run was recorded once; the agent-key check reads the chain live.</footer>
+      <footer>
+        <p>Built for the NEAR hackathon as a demonstration. Testnet only. The run was recorded once; the agent-key check reads the chain live.</p>
+        <p className="legal-links">
+          <a href="#terms">Terms and conditions</a>
+          <a href="#privacy">Privacy policy</a>
+        </p>
+      </footer>
     </div>
   );
 }

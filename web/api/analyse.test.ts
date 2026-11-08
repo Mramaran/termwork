@@ -83,6 +83,16 @@ describe("/api/analyse", () => {
     expect(body(r).rows[0]).toMatchObject({ status: "unclaimed", amountNear: "0.2", nearAccount: null });
   });
 
+  it("non-payable repo: the model judges an unclaimed PR with a placeholder account, not a missing one", async () => {
+    const seen: string[] = [];
+    const c = (async (msgs: { content: string }[]) => {
+      seen.push(msgs[1]!.content);
+      return { text: decision, receipt: {}, hash: "h" };
+    }) as unknown as AnalyseDeps["complete"];
+    await handle(post(), mk([pr(1, { nearAccount: null })], { complete: c }));
+    expect(JSON.parse(seen[0]!).near_account).toBe("unclaimed.testnet");
+  });
+
   it("non-payable repo: a repeat author is decided like anyone else", async () => {
     const r = await handle(post(), mk([pr(1), pr(2, { firstTime: false })]));
     expect(body(r).rows[1]).toMatchObject({ status: "would_pay", amountNear: "0.2" });

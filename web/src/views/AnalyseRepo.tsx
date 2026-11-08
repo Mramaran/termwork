@@ -276,7 +276,8 @@ export function AnalyseRepo() {
       case "would_pay":
         return `Would pay ${r.amountNear ?? "?"} NEAR to ${r.nearAccount ?? "the contributor"}`;
       case "skipped":
-        return `Skipped · ${r.reason}`;
+        // The reason is already in the Decision column.
+        return "Skipped";
     }
   }
 
@@ -369,7 +370,7 @@ export function AnalyseRepo() {
                           </a>
                         </td>
                         <td>{r.author}</td>
-                        <td>{r.reason}</td>
+                        <td>{r.reason.replace(/^skipped: /, "")}</td>
                         <td>{r.amountNear ? `${r.amountNear} NEAR` : "-"}</td>
                         <td>{statusCell(r)}</td>
                       </tr>
@@ -450,7 +451,7 @@ export function AnalyseRepo() {
 
       <form className="askform tryl" onSubmit={submit} aria-labelledby="any-h">
         <h3 id="any-h" className="formtitle">
-          Or analyse any public repository
+          Or analyse another repository
         </h3>
         <label>
           Repository
@@ -486,7 +487,9 @@ export function AnalyseRepo() {
         <button type="submit" className="btn go" disabled={busy || paying !== null}>
           Analyse
         </button>
-        <p className="note formnote">Analysis only: nothing is paid for repositories other than the demo repo.</p>
+        <p className="note formnote">
+          Analysis only. Outside the demo repo nothing is paid, no label or comment is added on GitHub, and the Paid PRs history above stays empty for that repo. The server reads GitHub with its own access token, so any public repository works, and a private one works only if that token can read it.
+        </p>
       </form>
     </section>
   );

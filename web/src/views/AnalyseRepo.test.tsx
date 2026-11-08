@@ -111,7 +111,7 @@ describe("AnalyseRepo", () => {
       row({ number: 3, status: "ready" }),
       row({ number: 4, status: "unclaimed", amountNear: "0.3", nearAccount: null }),
       row({ number: 5, status: "would_pay", amountNear: "0.2", nearAccount: "bob.testnet" }),
-      row({ number: 6, status: "skipped", reason: "not a first-time contributor", firstTime: false }),
+      row({ number: 6, status: "skipped", reason: "skipped: not a first-time contributor", firstTime: false }),
     ];
     mockApi({
       analyse: [ok(rows, { payable: false })],
@@ -124,7 +124,9 @@ describe("AnalyseRepo", () => {
     expect(screen.getByText("Ready to pay")).toBeTruthy();
     expect(screen.getByText("Earns 0.3 NEAR · unclaimed")).toBeTruthy();
     expect(screen.getByText("Would pay 0.2 NEAR to bob.testnet")).toBeTruthy();
-    expect(screen.getByText("Skipped · not a first-time contributor")).toBeTruthy();
+    // The reason sits in the Decision column once, without the "skipped:" prefix; the Status column just says Skipped.
+    expect(screen.getByText("not a first-time contributor")).toBeTruthy();
+    expect(screen.getByText("Skipped")).toBeTruthy();
     expect(screen.getByText("Paid 0.5 NEAR")).toBeTruthy();
   });
 

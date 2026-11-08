@@ -318,3 +318,20 @@ table.prs th, table.prs td { text-align: left; padding: 8px 10px; border-bottom:
 .walletbtn .acct { display: inline-flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 0.85rem; padding: 8px 14px; border: 1px solid var(--ok); border-radius: var(--r-pill); }
 .walletbtn .acct .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .walletbtn .err { max-width: 40ch; }
+
+/* Terms and privacy pages */
+.legal { max-width: 72ch; }
+.legal h2 { font-size: 1.6rem; margin: 8px 0 4px; }
+.legal h3 { margin: 24px 0 8px; font-size: 1.05rem; }
+.legal p, .legal li { line-height: 1.6; }
+.legal ul { padding-left: 1.2em; }
+.legal li + li { margin-top: 6px; }
+footer p { margin: 4px 0; }
+.legal-links { display: flex; flex-wrap: wrap; gap: 16px; }
+.legal-links a { color: inherit; }
+
+/* Run it yourself sections */
+.runsec { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
+.runsec h3 { margin: 0 0 10px; font-size: 1.15rem; }
+.runsec .cmdblock h4 { margin: 14px 0 6px; font-size: 0.98rem; }
+.runsec p { max-width: 72ch; line-height: 1.6; }

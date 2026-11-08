@@ -23,9 +23,9 @@
   <a href="#try-it"><b>Quick start</b></a>
 </p>
 
-<p align="center">
-  <img src="assets/repo.png" alt="The Analyse a repo tab, with the Paid PRs panel listing five on-chain payments" width="860">
-</p>
+https://github.com/user-attachments/assets/1e7a2f23-7f21-4bc1-87db-1c191ec920ed
+
+<p align="center"><i>The pitch, 2:41: why agents need a term, then a full run on real pull requests.</i></p>
 
 Termwork lets a [Sputnik DAO](https://github.com/near-daos/sputnik-dao-contract) on NEAR testnet hire an AI agent, the Contributor Rewards Steward, for a fixed term. The agent pays merged pull requests from a budget, sends anything large to a DAO vote, and files a renewal case when the term nears its end. The DAO can fire it at any time, and the contract then deletes the agent's key itself.
 
@@ -162,6 +162,10 @@ The run writes `demo-output.json` (git-ignored) with every transaction hash and 
 ## The web page
 
 The site is live at <https://termwork-nu.vercel.app>, with a **Connect Intear** (or MyNearWallet) button in the header. It has three tabs, meant to be visited in order:
+
+<p align="center">
+  <img src="assets/repo.png" alt="The Analyse a repo tab, with the Paid PRs panel listing five on-chain payments" width="860">
+</p>
 
 | Tab | What it does |
 |---|---|

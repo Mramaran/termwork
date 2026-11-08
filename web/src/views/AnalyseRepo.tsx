@@ -47,6 +47,9 @@ const FIT_REASON: Record<string, string> = {
 /** The allowlisted demo repository: real testnet payments happen only here. */
 export const DEMO_REPO = (import.meta.env.VITE_DEMO_REPO as string | undefined) || "Mramaran/mission-dao-demo";
 
+/** One-click examples under the form: the demo repo plus two active public NEAR repositories. */
+export const EXAMPLE_REPOS = [DEMO_REPO, "near/near-sdk-rs", "near/near-cli-rs"];
+
 /** What the server does, in order. One request covers all of it, so the steps advance on a timer. */
 const STEPS_PAYABLE = ["Reading merged pull requests from GitHub", "Counting each contributor's merges in the window", "Checking NEAR for payments already made"];
 const STEPS_OTHER = ["Reading merged pull requests from GitHub", "Counting each contributor's merges in the window", "Asking the AI to judge each pull request", "Checking every answer against the fixed rules"];
@@ -453,6 +456,14 @@ export function AnalyseRepo() {
         <h3 id="any-h" className="formtitle">
           Or analyse another repository
         </h3>
+        <div className="presets examples" role="group" aria-label="Example repositories">
+          <span className="small">Try one:</span>
+          {EXAMPLE_REPOS.map((s) => (
+            <button key={s} type="button" className="btn" disabled={busy || paying !== null} onClick={() => useSuggestion(s)}>
+              {s}
+            </button>
+          ))}
+        </div>
         <label>
           Repository
           <input value={repo} placeholder="owner/name or a GitHub link" maxLength={200} required onChange={(e) => setRepo(e.target.value)} />

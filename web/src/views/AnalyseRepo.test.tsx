@@ -89,6 +89,18 @@ describe("AnalyseRepo", () => {
     expect(callsTo(calls, "/api/analyse")[0]!.body).toEqual({ repo: " near/x ", range: { preset: "month" } });
   });
 
+  it("example buttons fill the field and analyse that repo over the chosen range", async () => {
+    const calls = mockApi({ analyse: [ok([])] });
+    render(<AnalyseRepo />);
+    const examples = screen.getByRole("group", { name: "Example repositories" });
+    expect(within(examples).getAllByRole("button").map((b) => b.textContent)).toEqual(["Mramaran/mission-dao-demo", "near/near-sdk-rs", "near/near-cli-rs"]);
+    fireEvent.click(screen.getByLabelText("Last 1 week"));
+    fireEvent.click(within(examples).getByRole("button", { name: "near/near-sdk-rs" }));
+    await waitFor(() => expect(callsTo(calls, "/api/analyse")).toHaveLength(1));
+    expect(callsTo(calls, "/api/analyse")[0]!.body).toEqual({ repo: "near/near-sdk-rs", range: { preset: "week" } });
+    expect((screen.getByLabelText("Repository") as HTMLInputElement).value).toBe("near/near-sdk-rs");
+  });
+
   it("custom shows two date inputs and posts the dates", async () => {
     const calls = mockApi({ analyse: [ok([])] });
     const { container } = render(<AnalyseRepo />);
@@ -148,7 +160,8 @@ describe("AnalyseRepo", () => {
     render(<AnalyseRepo />);
     typeRepo("o/r");
     analyse();
-    fireEvent.click(await screen.findByRole("button", { name: "near/near-cli-rs" }));
+    const suggested = await screen.findByRole("group", { name: "Suggested repositories" });
+    fireEvent.click(within(suggested).getByRole("button", { name: "near/near-cli-rs" }));
     await waitFor(() => expect(callsTo(calls, "/api/analyse")).toHaveLength(2));
     expect(callsTo(calls, "/api/analyse")[1]!.body).toMatchObject({ repo: "near/near-cli-rs" });
     expect((screen.getByLabelText("Repository") as HTMLInputElement).value).toBe("near/near-cli-rs");
@@ -159,7 +172,8 @@ describe("AnalyseRepo", () => {
     render(<AnalyseRepo />);
     typeRepo("o/missing");
     analyse();
-    expect(await screen.findByRole("button", { name: "near/near-sdk-rs" })).toBeTruthy();
+    const suggested = await screen.findByRole("group", { name: "Suggested repositories" });
+    expect(within(suggested).getByRole("button", { name: "near/near-sdk-rs" })).toBeTruthy();
     expect(screen.getByText(/could not be found/)).toBeTruthy();
   });
 

@@ -335,3 +335,4 @@ footer p { margin: 4px 0; }
 .runsec h3 { margin: 0 0 10px; font-size: 1.15rem; }
 .runsec .cmdblock h4 { margin: 14px 0 6px; font-size: 0.98rem; }
 .runsec p { max-width: 72ch; line-height: 1.6; }
+.presets.examples { grid-column: 1 / -1; align-items: center; margin: 0 0 4px; }

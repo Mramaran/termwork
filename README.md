@@ -17,7 +17,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Mramaran/termwork/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Mramaran/termwork/actions/workflows/ci.yml/badge.svg"></a>
   <a href="#tests"><img alt="TypeScript tests: 347 passing" src="https://img.shields.io/badge/TypeScript%20tests-347%20passing-2ea44f?style=flat-square"></a>
   <a href="#tests"><img alt="Contract tests: 57 passing" src="https://img.shields.io/badge/contract%20tests-57%20passing-2ea44f?style=flat-square"></a>
   <a href="#the-end-to-end-demo"><img alt="Demo checks: 8 of 8" src="https://img.shields.io/badge/demo%20checks-8%2F8%20PASS-2ea44f?style=flat-square"></a>
@@ -339,8 +338,6 @@ The `receipts/` folder holds the live receipts from the recorded runs (model `Qw
 </details>
 
 ## Tests
-
-[CI](.github/workflows/ci.yml) runs the typecheck and every test below on each push and pull request.
 
 | Command | Runs | Needs |
 |---|---|---|

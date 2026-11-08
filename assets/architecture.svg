@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="960" height="620" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Termwork architecture: the DAO and the agent's signer both act on the mandate contract; the model only advises">
+<defs>
+<marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/></marker>
+<marker id="hs" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10 0 L0 5 L10 10 z" fill="#8b949e"/></marker>
+<marker id="ha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#00EC97"/></marker>
+</defs>
+<rect width="960" height="620" rx="16" fill="#0d1117"/>
+<rect x="330" y="20" width="610" height="110" rx="14" fill="#161b22" stroke="#30363d"/>
+<text x="346" y="44" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9198a1">OUTSIDE SERVICES</text>
+<rect x="20" y="160" width="280" height="250" rx="14" fill="#161b22" stroke="#30363d"/>
+<text x="36" y="184" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9198a1">GOVERNANCE</text>
+<rect x="330" y="160" width="610" height="250" rx="14" fill="#161b22" stroke="#30363d"/>
+<text x="346" y="184" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9198a1">OPERATOR MACHINE</text>
+<rect x="20" y="450" width="620" height="150" rx="14" fill="#161b22" stroke="#30363d"/>
+<text x="624" y="474" text-anchor="end" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9198a1">NEAR TESTNET</text>
+<rect x="660" y="450" width="280" height="150" rx="14" fill="#161b22" stroke="#30363d"/>
+<text x="676" y="474" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9198a1">WEBSITE</text>
+<path d="M520 109 V186" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#h)"/>
+<path d="M580 222 H800 V113" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#h)" marker-start="url(#hs)"/>
+<path d="M580 256 H760 V306" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#h)"/>
+<path d="M470 266 V306" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#h)"/>
+<path d="M470 386 V476" fill="none" stroke="#00EC97" stroke-width="2.2" marker-end="url(#ha)"/>
+<path d="M160 266 V306" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#h)"/>
+<path d="M200 386 V512 H356" fill="none" stroke="#00EC97" stroke-width="2.2" marker-end="url(#ha)"/>
+<path d="M360 556 H80 V390" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#h)"/>
+<path d="M690 525 H584" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#h)"/>
+<rect x="360" y="45" width="220" height="64" rx="10" fill="#0d1117" stroke="#3d444d" stroke-width="1"/>
+<text x="470" y="73" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">GitHub</text>
+<text x="470" y="90" text-anchor="middle" font-size="12" fill="#9198a1">merged pull requests</text>
+<rect x="690" y="45" width="220" height="64" rx="10" fill="#0d1117" stroke="#3d444d" stroke-width="1"/>
+<text x="800" y="73" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">NEAR AI Cloud</text>
+<text x="800" y="90" text-anchor="middle" font-size="12" fill="#9198a1">Qwen3.8-27B inside a TEE</text>
+<rect x="50" y="196" width="220" height="70" rx="10" fill="#0d1117" stroke="#3d444d" stroke-width="1"/>
+<text x="160" y="227" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Council</text>
+<text x="160" y="244" text-anchor="middle" font-size="12" fill="#9198a1">2 of 3 members · CLI or wallet</text>
+<rect x="50" y="310" width="220" height="76" rx="10" fill="#0d1117" stroke="#3d444d" stroke-width="1"/>
+<text x="160" y="335.5" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Sputnik DAO</text>
+<text x="160" y="352.5" text-anchor="middle" font-size="12" fill="#9198a1">sputnikv2.testnet</text>
+<text x="160" y="369.5" text-anchor="middle" font-size="12" fill="#9198a1">votes on every proposal</text>
+<rect x="360" y="190" width="220" height="76" rx="10" fill="#0d1117" stroke="#3d444d" stroke-width="1"/>
+<text x="470" y="215.5" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Agent</text>
+<text x="470" y="232.5" text-anchor="middle" font-size="12" fill="#9198a1">reads PRs · asks the model</text>
+<text x="470" y="249.5" text-anchor="middle" font-size="12" fill="#9198a1">fixed-rule validator</text>
+<rect x="360" y="310" width="220" height="76" rx="10" fill="#0d1117" stroke="#00EC97" stroke-width="2"/>
+<text x="470" y="335.5" text-anchor="middle" font-size="15" font-weight="600" fill="#00EC97">Signer</text>
+<text x="470" y="352.5" text-anchor="middle" font-size="12" fill="#9198a1">127.0.0.1 · 5 operations</text>
+<text x="470" y="369.5" text-anchor="middle" font-size="12" fill="#9198a1">holds the agent's only key</text>
+<rect x="690" y="310" width="220" height="76" rx="10" fill="#0d1117" stroke="#3d444d" stroke-width="1"/>
+<text x="800" y="335.5" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Receipts</text>
+<text x="800" y="352.5" text-anchor="middle" font-size="12" fill="#9198a1">one signed answer per PR</text>
+<text x="800" y="369.5" text-anchor="middle" font-size="12" fill="#9198a1">named by SHA-256</text>
+<rect x="360" y="480" width="220" height="90" rx="10" fill="#0d1117" stroke="#00EC97" stroke-width="2"/>
+<text x="470" y="504" text-anchor="middle" font-size="15" font-weight="600" fill="#00EC97">Mandate contract</text>
+<text x="470" y="521" text-anchor="middle" font-size="12" fill="#9198a1">on the agent's own account</text>
+<text x="470" y="538" text-anchor="middle" font-size="12" fill="#9198a1">mission · budget · term</text>
+<text x="470" y="555" text-anchor="middle" font-size="12" fill="#9198a1">work log · renewal case</text>
+<rect x="690" y="480" width="220" height="90" rx="10" fill="#0d1117" stroke="#3d444d" stroke-width="1"/>
+<text x="800" y="504" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Web page and /api</text>
+<text x="800" y="521" text-anchor="middle" font-size="12" fill="#9198a1">on Vercel</text>
+<text x="800" y="538" text-anchor="middle" font-size="12" fill="#9198a1">reads the chain and receipts</text>
+<text x="800" y="555" text-anchor="middle" font-size="12" fill="#9198a1">pays the demo repo</text>
+<rect x="468.1" y="135" width="103.8" height="20" rx="10" fill="#0d1117" stroke="#30363d"/>
+<text x="520" y="149" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#9198a1">pull requests</text>
+<rect x="618.3" y="190" width="143.39999999999998" height="20" rx="10" fill="#0d1117" stroke="#30363d"/>
+<text x="690" y="204" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#9198a1">prompt only, no key</text>
+<rect x="621.5" y="228" width="117" height="20" rx="10" fill="#0d1117" stroke="#30363d"/>
+<text x="680" y="242" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#9198a1">signed decision</text>
+<rect x="727.9" y="274" width="64.19999999999999" height="20" rx="10" fill="#0d1117" stroke="#30363d"/>
+<text x="760" y="288" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#9198a1">SHA-256</text>
+<rect x="401.6" y="278" width="136.8" height="20" rx="10" fill="#0d1117" stroke="#30363d"/>
+<text x="470" y="292" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#9198a1">one allowed action</text>
+<rect x="134.5" y="278" width="51" height="20" rx="10" fill="#0d1117" stroke="#30363d"/>
+<text x="160" y="292" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#9198a1">votes</text>
+<rect x="404.9" y="422" width="130.2" height="20" rx="10" fill="#0d1117" stroke="#00EC97"/>
+<text x="470" y="436" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#00EC97">function-call key</text>
+<rect x="95.30000000000001" y="420" width="209.39999999999998" height="20" rx="10" fill="#0d1117" stroke="#00EC97"/>
+<text x="200" y="434" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#00EC97">hire · renew · fire · release</text>
+<rect x="105.4" y="568" width="229.2" height="20" rx="10" fill="#0d1117" stroke="#30363d"/>
+<text x="220" y="582" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#9198a1">opens proposals: spends, renewal</text>
+<rect x="611.5" y="496" width="51" height="20" rx="10" fill="#0d1117" stroke="#30363d"/>
+<text x="637" y="510" text-anchor="middle" font-size="11" font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" fill="#9198a1">reads</text>
+</svg>
